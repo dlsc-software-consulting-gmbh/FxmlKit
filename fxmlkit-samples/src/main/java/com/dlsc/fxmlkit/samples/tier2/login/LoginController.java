@@ -1,5 +1,6 @@
 package com.dlsc.fxmlkit.samples.tier2.login;
 
+import com.dlsc.fxmlkit.annotations.PostInject;
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
@@ -55,5 +56,11 @@ public class LoginController {
     private void showMessage(String message, boolean success) {
         messageLabel.setText(message);
         messageLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: " + (success ? "#3d7b3d" : "#aa4646") + ";");
+    }
+
+    @PostInject
+    private void afterInjection() {
+        // Optional initialization after dependencies are injected
+        System.out.println("AuthService injected: " + (authService != null));
     }
 }
