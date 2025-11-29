@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.geometry.Insets?>
+
+<VBox alignment="CENTER" spacing="15" prefWidth="300" prefHeight="250"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.dlsc.fxmlkit.samples.tier3.multiuser.UserSessionController">
+
+    <padding><Insets topRightBottomLeft="20"/></padding>
+
+    <!-- Welcome message - shows which user this session belongs to -->
+    <Label fx:id="welcomeLabel" text="Welcome!"
+           style="-fx-font-size: 20px; -fx-font-weight: bold;"/>
+
+    <!-- Session info - proves each tab has its own SessionService -->
+    <VBox alignment="CENTER" spacing="5"
+          style="-fx-background-color: #f5f5f5; -fx-background-radius: 8; -fx-padding: 15;">
+        <Label fx:id="sessionIdLabel" text="Session: ..."
+               style="-fx-font-size: 12px; -fx-text-fill: #666;"/>
+        <Label fx:id="loginTimeLabel" text="Login: ..."
+               style="-fx-font-size: 12px; -fx-text-fill: #666;"/>
+        <Label fx:id="actionCountLabel" text="Actions: 0"
+               style="-fx-font-size: 12px; -fx-text-fill: #666;"/>
+    </VBox>
+
+    <!-- Action button - proves each session maintains its own state -->
+    <Button text="Perform Action" onAction="#onPerformAction"/>
+
+    <Label text="Each tab has isolated SessionService"
+           style="-fx-font-size: 10px; -fx-text-fill: #999;"/>
+
+</VBox>
