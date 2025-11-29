@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <modules>
+        <module>fxmlkit</module>
+    </modules>
+    <groupId>com.dlsc.fxmlkit</groupId>
+    <artifactId>parent</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <parent>
+        <groupId>com.dlsc</groupId>
+        <artifactId>dlsc-maven-parent</artifactId>
+        <version>1.6.0</version>
+    </parent>
+
+    <name>FxmlKitParent</name>
+    <description>Parent project of FxmlKit</description>
+
+    <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
+    <scm>
+        <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
+    </scm>
+    <licenses>
+        <license>
+            <name>Apache 2.0</name>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Dirk Lemmermann</name>
+            <email>dlemmermann@gmail.com</email>
+            <organization>DLSC Software &amp; Consulting GmbH</organization>
+            <url>https://www.dlsc.com</url>
+        </developer>
+        <developer>
+            <name>Lee Wyatt</name>
+            <email>leewyatt7788@gmail.com</email>
+        </developer>
+    </developers>
+
+    <properties>
+        <project.identifier>fxmlkit</project.identifier>
+        <project.github.repository>dlsc-software-consulting-gmbh/FxmlKit</project.github.repository>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <java.version>21</java.version>
+        <javafx.version>23.0.2</javafx.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-controls</artifactId>
+                <version>${javafx.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-fxml</artifactId>
+                <version>${javafx.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

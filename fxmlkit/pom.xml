@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.dlsc.fxmlkit</groupId>
+        <artifactId>parent</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>fxmlkit</artifactId>
+    <packaging>jar</packaging>
+
+    <name>FxmlKit</name>
+    <description>A collection of utilities to work with FXML in JavaFX.</description>
+
+    <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
+    <scm>
+        <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
+    </scm>
+    <licenses>
+        <license>
+            <name>Apache 2.0</name>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Dirk Lemmermann</name>
+            <email>dlemmermann@gmail.com</email>
+            <organization>DLSC Software &amp; Consulting GmbH</organization>
+            <url>https://www.dlsc.com</url>
+        </developer>
+        <developer>
+            <name>Lee Wyatt</name>
+            <email>leewyatt7788@gmail.com</email>
+        </developer>
+    </developers>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>
