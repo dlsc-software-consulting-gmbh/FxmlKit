@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.VBox?>
+<VBox alignment="CENTER" spacing="20" prefWidth="400" prefHeight="300"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.dlsc.fxmlkit.samples.tier1.viewpath.CustomPathController">
+
+    <Label text="FxmlKit - Custom Path Demo" style="-fx-font-size: 14px; -fx-text-fill: gray;"/>
+    <Label fx:id="messageLabel" text="FXML loaded from custom path!" style="-fx-font-size: 24px;"/>
+    <Label text="📁 FXML: my-custom-view.fxml" style="-fx-font-size: 12px; -fx-text-fill: #666;"/>
+    <Label text="📄 View: CustomPathView.java" style="-fx-font-size: 12px; -fx-text-fill: #666;"/>
+
+    <Button text="Click Me" onAction="#onClick"/>
+
+</VBox>

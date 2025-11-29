@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox alignment="CENTER" spacing="20" prefWidth="400" prefHeight="300"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.dlsc.fxmlkit.samples.tier1.provider.WelcomeController">
+
+    <Label text="FxmlKit - Provider Demo" style="-fx-font-size: 14px; -fx-text-fill: gray;"/>
+    <Label fx:id="greetingLabel" text="Welcome!" style="-fx-font-size: 32px; -fx-font-weight: bold;"/>
+
+    <HBox alignment="CENTER" spacing="10">
+        <TextField fx:id="nameField" promptText="Enter your name"/>
+        <Button text="Greet Me" onAction="#onGreet"/>
+    </HBox>
+
+</VBox>

@@ -1,0 +1,9 @@
+.title-label {
+    -fx-font-size: 14px;
+    -fx-text-fill: gray;
+}
+
+.greetings-label {
+    -fx-font-size: 32px;
+    -fx-text-fill: rgb(126, 126, 219);
+}
