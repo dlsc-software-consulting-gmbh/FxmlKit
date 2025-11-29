@@ -1,11 +1,13 @@
 package com.dlsc.fxmlkit.fxml;
 
-import javafx.scene.Parent;
 import com.dlsc.fxmlkit.annotations.FxmlPath;
+import javafx.scene.Parent;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.Set;
 import java.util.logging.Level;
@@ -222,15 +224,21 @@ public final class FxmlPathResolver {
         boolean anyAttached = false;
 
         // Find all FXMLs in the dependency tree (including root)
-        Set<URL> allFxmls = FxmlDependencyAnalyzer.findAllIncludedFxmls(fxmlUrl);
+        Set<URI> allFxmlUris = FxmlDependencyAnalyzer.findAllIncludedFxmls(fxmlUrl);
 
         logger.log(Level.FINE, "Auto-attaching stylesheets for {0} FXML file(s)",
-                allFxmls.size());
+                allFxmlUris.size());
 
         // Attach stylesheet for each FXML
-        for (URL fxml : allFxmls) {
-            boolean attached = autoAttachStylesheetForSingleFxml(root, fxml);
-            anyAttached = anyAttached || attached;
+        for (URI fxmlUri : allFxmlUris) {
+            try {
+                // Convert URI to URL for I/O operations
+                URL fxml = fxmlUri.toURL();
+                boolean attached = autoAttachStylesheetForSingleFxml(root, fxml);
+                anyAttached = anyAttached || attached;
+            } catch (MalformedURLException e) {
+                logger.log(Level.WARNING, "Invalid URI, cannot convert to URL: " + fxmlUri, e);
+            }
         }
 
         return anyAttached;

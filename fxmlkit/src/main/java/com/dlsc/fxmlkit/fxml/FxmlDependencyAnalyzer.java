@@ -7,6 +7,8 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,24 +25,32 @@ import java.util.logging.Logger;
  * <p>This class recursively analyzes FXML files to discover all nested includes,
  * enabling automatic stylesheet attachment for the entire FXML hierarchy.
  *
+ * <h2>Performance Consideration</h2>
+ * <p>This class returns {@link URI} instead of {@link URL} because {@link URL#equals(Object)}
+ * and {@link URL#hashCode()} perform DNS lookups, which can be orders of magnitude slower
+ * than {@link URI}'s string-based comparison. This makes {@code Set<URI>} significantly
+ * more efficient for collection operations.
+ *
  * <h2>Features</h2>
  * <ul>
  *   <li>Recursive analysis of {@code <fx:include>} elements</li>
  *   <li>Circular dependency detection</li>
- *   <li>Minimal overhead (uses standard DOM parser)</li>
+ *   <li>Efficient deduplication using {@link URI}</li>
  *   <li>Thread-safe (stateless)</li>
  * </ul>
  *
  * <h2>Usage Example</h2>
  * <pre>{@code
- * URL mainFxml = getClass().getResource("Main.fxml");
- * Set<URL> allFxmls = FxmlDependencyAnalyzer.findAllIncludedFxmls(mainFxml);
+ * Set<URI> allFxmlUris = FxmlDependencyAnalyzer.findAllIncludedFxmls(rootUrl);
  *
- * // allFxmls contains:
- * // - Main.fxml
- * // - ChildA.fxml (included by Main)
- * // - ChildA1.fxml (included by ChildA)
+ * for (URI uri : allFxmlUris) {
+ *     URL url = uri.toURL();
+ *     // ... use url for loading ...
+ * }
  * }</pre>
+ *
+ * @see FxmlPathResolver
+ * @see URI
  */
 public final class FxmlDependencyAnalyzer {
 
@@ -66,44 +76,69 @@ public final class FxmlDependencyAnalyzer {
      * all nested FXML files. The result includes the root FXML and all its transitive
      * dependencies.
      *
-     * <p><b>Circular dependencies:</b> Detected and logged as warnings. Each FXML
-     * is visited only once.
+     * <p>Circular dependencies are detected and logged as warnings.
      *
      * @param rootFxmlUrl the root FXML URL to analyze (must not be null)
-     * @return set of all FXML URLs (including root), never null
+     * @return set of all FXML URIs (including root), never null
      */
-    public static Set<URL> findAllIncludedFxmls(URL rootFxmlUrl) {
+    public static Set<URI> findAllIncludedFxmls(URL rootFxmlUrl) {
         if (rootFxmlUrl == null) {
             logger.log(Level.WARNING, "Cannot analyze null FXML URL");
             return Collections.emptySet();
         }
 
-        Set<URL> allFxmls = new LinkedHashSet<>();
-        Set<URL> visited = new HashSet<>();
+        Set<URI> allFxmls = new LinkedHashSet<>();
+        Set<URI> visited = new HashSet<>();
 
-        analyzeRecursive(rootFxmlUrl, allFxmls, visited);
+        try {
+            URI rootUri = rootFxmlUrl.toURI();
+            analyzeRecursive(rootUri, allFxmls, visited);
 
-        logger.log(Level.FINE, "Found {0} FXML file(s) in dependency tree of: {1}",
-                new Object[]{allFxmls.size(), rootFxmlUrl});
+            logger.log(Level.FINE, "Found {0} FXML file(s) in dependency tree of: {1}",
+                    new Object[]{allFxmls.size(), rootFxmlUrl});
+
+        } catch (URISyntaxException e) {
+            logger.log(Level.WARNING, "Invalid FXML URL, cannot convert to URI: " + rootFxmlUrl, e);
+            return Collections.emptySet();
+        }
 
         return allFxmls;
     }
 
     /**
-     * Recursively analyze FXML and collect all includes.
+     * Recursively analyzes FXML and collects all includes.
+     *
+     * <p>Uses two sets for tracking:
+     * <ul>
+     *   <li>{@code allFxmls}: All discovered FXML files (prevents redundant analysis)</li>
+     *   <li>{@code visited}: Current recursion path (detects circular dependencies)</li>
+     * </ul>
+     *
+     * @param fxmlUri  the FXML file URI
+     * @param allFxmls collection of all discovered FXMLs
+     * @param visited  tracking set for current recursion path
      */
-    private static void analyzeRecursive(URL fxmlUrl, Set<URL> allFxmls, Set<URL> visited) {
-        // Add current FXML
-        allFxmls.add(fxmlUrl);
-
-        // Check for circular dependency
-        if (visited.contains(fxmlUrl)) {
-            logger.log(Level.WARNING, "Circular dependency detected: {0}", fxmlUrl);
+    private static void analyzeRecursive(URI fxmlUri, Set<URI> allFxmls, Set<URI> visited) {
+        // Circular dependency check
+        if (visited.contains(fxmlUri)) {
+            logger.log(Level.WARNING, "Circular dependency detected: {0}", fxmlUri);
             return;
         }
-        visited.add(fxmlUrl);
+
+        // Skip if already analyzed
+        if (allFxmls.contains(fxmlUri)) {
+            logger.log(Level.FINEST, "Already analyzed, skipping: {0}", fxmlUri);
+            return;
+        }
+
+        // Track this FXML in both sets
+        visited.add(fxmlUri);
+        allFxmls.add(fxmlUri);
 
         try {
+            // Convert to URL for I/O operations
+            URL fxmlUrl = fxmlUri.toURL();
+
             // Parse FXML
             Document doc = parseXml(fxmlUrl);
 
@@ -111,36 +146,37 @@ public final class FxmlDependencyAnalyzer {
             List<String> includePaths = findIncludePaths(doc);
 
             logger.log(Level.FINEST, "Found {0} include(s) in: {1}",
-                    new Object[]{includePaths.size(), fxmlUrl});
+                    new Object[]{includePaths.size(), fxmlUri});
 
             // Recursively analyze each include
             for (String includePath : includePaths) {
                 try {
                     URL includedUrl = new URL(fxmlUrl, includePath);
+                    URI includedUri = includedUrl.toURI();
 
                     logger.log(Level.FINEST, "Resolving include: {0} -> {1}",
-                            new Object[]{includePath, includedUrl});
+                            new Object[]{includePath, includedUri});
 
-                    analyzeRecursive(includedUrl, allFxmls, visited);
+                    analyzeRecursive(includedUri, allFxmls, visited);
 
                 } catch (Exception e) {
                     logger.log(Level.WARNING,
                             "Failed to resolve fx:include ''{0}'' in {1}: {2}",
-                            new Object[]{includePath, fxmlUrl, e.getMessage()});
+                            new Object[]{includePath, fxmlUri, e.getMessage()});
                 }
             }
 
         } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to analyze FXML: {0} - {1}",
-                    new Object[]{fxmlUrl, e.getMessage()});
+                    new Object[]{fxmlUri, e.getMessage()});
         } finally {
-            // This allows the same FXML to appear in different branches
-            visited.remove(fxmlUrl);
+            // Remove from current path
+            visited.remove(fxmlUri);
         }
     }
 
     /**
-     * Find all fx:include paths in the document.
+     * Finds all fx:include paths in the document.
      */
     private static List<String> findIncludePaths(Document doc) {
         List<String> paths = new ArrayList<>();
@@ -160,7 +196,7 @@ public final class FxmlDependencyAnalyzer {
     }
 
     /**
-     * Extract source attributes from NodeList.
+     * Extracts source attributes from NodeList.
      */
     private static void extractPaths(NodeList includes, List<String> paths) {
         for (int i = 0; i < includes.getLength(); i++) {
@@ -175,7 +211,7 @@ public final class FxmlDependencyAnalyzer {
     }
 
     /**
-     * Parse XML document from URL.
+     * Parses XML document from URL.
      */
     private static Document parseXml(URL url) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
