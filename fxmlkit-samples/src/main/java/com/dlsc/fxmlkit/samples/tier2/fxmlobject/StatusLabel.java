@@ -2,9 +2,9 @@ package com.dlsc.fxmlkit.samples.tier2.fxmlobject;
 
 import com.dlsc.fxmlkit.annotations.FxmlObject;
 import com.dlsc.fxmlkit.annotations.PostInject;
+import com.google.inject.Inject;
 import javafx.scene.control.Label;
 
-import javax.inject.Inject;
 
 /**
  * A custom Label that displays system status.

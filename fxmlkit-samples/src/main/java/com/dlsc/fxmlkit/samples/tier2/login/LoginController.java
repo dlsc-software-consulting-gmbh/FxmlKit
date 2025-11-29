@@ -1,12 +1,12 @@
 package com.dlsc.fxmlkit.samples.tier2.login;
 
 import com.dlsc.fxmlkit.annotations.PostInject;
+import com.google.inject.Inject;
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 
-import javax.inject.Inject;
 
 /**
  * Controller for the login view.

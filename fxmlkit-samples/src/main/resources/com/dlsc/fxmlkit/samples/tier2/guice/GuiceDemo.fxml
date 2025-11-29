@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.geometry.Insets?>
+<?import com.dlsc.fxmlkit.samples.tier2.guice.StatusCard?>
+
+<VBox alignment="CENTER" spacing="25" prefWidth="500" prefHeight="400"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.dlsc.fxmlkit.samples.tier2.guice.GuiceDemoController">
+
+    <padding><Insets topRightBottomLeft="20"/></padding>
+
+    <!-- Header -->
+    <VBox alignment="CENTER" spacing="5">
+        <Label text="FxmlKit + Guice" style="-fx-font-size: 14px; -fx-text-fill: gray;"/>
+        <Label text="Dependency Injection Demo" style="-fx-font-size: 24px; -fx-font-weight: bold;"/>
+    </VBox>
+
+    <!-- Two independent cards side by side -->
+    <HBox alignment="CENTER" spacing="20">
+
+        <!-- Card 1: Controller @Inject -->
+        <VBox alignment="CENTER" spacing="8" style="-fx-background-color: #f5f5f5; -fx-background-radius: 8; -fx-padding: 15;">
+            <Label text="Controller @Inject" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+            <Label fx:id="userLabel" text="⏳ Loading..." style="-fx-font-size: 12px;"/>
+            <Label fx:id="roleLabel" text="" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+        </VBox>
+
+        <!-- Card 2: @FxmlObject + @Inject + @PostInject (self-contained) -->
+        <StatusCard/>
+
+    </HBox>
+
+    <!-- Footer -->
+    <VBox alignment="CENTER" spacing="3">
+        <Label text="Left card: @Inject in Controller" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+        <Label text="Right card: @FxmlObject + @Inject + @PostInject" style="-fx-font-size: 11px; -fx-text-fill: #666;"/>
+    </VBox>
+
+</VBox>
