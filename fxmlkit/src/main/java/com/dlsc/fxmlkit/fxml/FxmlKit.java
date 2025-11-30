@@ -4,6 +4,8 @@ import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.core.LiteDiAdapter;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,6 +104,40 @@ public final class FxmlKit {
 
     private static final Set<Class<?>> INCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
     private static final Set<Class<?>> EXCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Default package prefixes to skip during injection (performance optimization).
+     *
+     * <p>These packages typically contain JDK/JavaFX internal classes that don't
+     * need dependency injection. Skipping them improves performance by avoiding
+     * unnecessary reflection checks.
+     */
+    private static final List<String> DEFAULT_SKIP_PACKAGE_PREFIXES = List.of(
+            "java.",
+            "javax.",
+            "javafx.",
+            "jdk.",
+            "sun.",
+            "com.sun."
+    );
+
+    /**
+     * Package prefixes to skip during injection.
+     *
+     * <p>This list is mutable and can be modified directly if needed.
+     * For example, if your package is {@code java.study.day01}, you can:
+     *
+     * <pre>{@code
+     * FxmlKit.getSkipPackagePrefixes().remove("java.");
+     * FxmlKit.getSkipPackagePrefixes().add("java.lang.");
+     * FxmlKit.getSkipPackagePrefixes().add("java.util.");
+     * FxmlKit.getSkipPackagePrefixes().add("java.io.");
+     * // ... add other JDK packages as needed
+     * }</pre>
+     *
+     * <p>This is a rare edge case - most users will never need to modify this list.
+     */
+    private static final List<String> SKIP_PACKAGE_PREFIXES = new ArrayList<>(DEFAULT_SKIP_PACKAGE_PREFIXES);
 
     private FxmlKit() {
     }
@@ -286,6 +322,27 @@ public final class FxmlKit {
         return fxmlInjectionPolicy;
     }
 
+    /**
+     * Gets the list of package prefixes to skip during injection.
+     *
+     * <p>Classes in these packages are skipped for performance optimization,
+     * avoiding unnecessary reflection checks on JDK/JavaFX internal classes.
+     *
+     * <p>The returned list is mutable. Modify directly if needed (rare case):
+     *
+     * <pre>{@code
+     * // If your package is java.study.day01:
+     * FxmlKit.getSkipPackagePrefixes().remove("java.");
+     * FxmlKit.getSkipPackagePrefixes().add("java.lang.");
+     * FxmlKit.getSkipPackagePrefixes().add("java.util.");
+     * }</pre>
+     *
+     * @return the mutable list of skip package prefixes
+     */
+    public static List<String> getSkipPackagePrefixes() {
+        return SKIP_PACKAGE_PREFIXES;
+    }
+
     // Include/Exclude Node Types
 
     /**
@@ -380,6 +437,7 @@ public final class FxmlKit {
      *   <li>Auto-attach styles to true</li>
      *   <li>Node policy to EXPLICIT_ONLY</li>
      *   <li>Include/exclude lists to empty</li>
+     *   <li>Skip package prefixes to defaults</li>
      * </ul>
      *
      * <p>Use case: Testing, or resetting between user sessions.
@@ -391,5 +449,7 @@ public final class FxmlKit {
         fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
         INCLUDE_NODE_TYPES.clear();
         EXCLUDE_NODE_TYPES.clear();
+        SKIP_PACKAGE_PREFIXES.clear();
+        SKIP_PACKAGE_PREFIXES.addAll(DEFAULT_SKIP_PACKAGE_PREFIXES);
     }
 }

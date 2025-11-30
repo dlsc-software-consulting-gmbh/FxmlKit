@@ -4,4 +4,5 @@ open module com.dlsc.fxmlkit.samples {
 
     requires com.google.guice;
     requires com.dlsc.fxmlkit;
+    requires com.dlsc.fxmlkit.guice;
 }

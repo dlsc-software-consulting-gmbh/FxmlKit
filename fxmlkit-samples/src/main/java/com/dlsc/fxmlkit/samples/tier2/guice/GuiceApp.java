@@ -1,6 +1,7 @@
 package com.dlsc.fxmlkit.samples.tier2.guice;
 
 import com.dlsc.fxmlkit.fxml.FxmlKit;
+import com.dlsc.fxmlkit.guice.GuiceDiAdapter;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;

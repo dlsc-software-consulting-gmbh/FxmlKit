@@ -29,7 +29,13 @@
         <dependency>
             <groupId>com.dlsc.fxmlkit</groupId>
             <artifactId>fxmlkit</artifactId>
-            <version>1.0.0</version>
+            <version>${project.version}</version>
+        </dependency>
+
+           <dependency>
+            <groupId>com.dlsc.fxmlkit</groupId>
+            <artifactId>fxmlkit-guice</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
         <dependency>

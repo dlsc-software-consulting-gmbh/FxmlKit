@@ -1,4 +1,4 @@
-package com.dlsc.fxmlkit.samples.tier2.guice;
+package com.dlsc.fxmlkit.guice;
 
 import com.dlsc.fxmlkit.core.BaseDiAdapter;
 import com.google.inject.Injector;

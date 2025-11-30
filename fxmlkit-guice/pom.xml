@@ -10,11 +10,11 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>fxmlkit</artifactId>
+    <artifactId>fxmlkit-guice</artifactId>
     <packaging>jar</packaging>
 
-    <name>FxmlKit</name>
-    <description>A collection of utilities to work with FXML in JavaFX.</description>
+    <name>FxmlKit Guice</name>
+    <description>Guice integration for FxmlKit</description>
 
     <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
     <scm>
@@ -41,14 +41,15 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <scope>provided</scope>
+            <groupId>com.dlsc.fxmlkit</groupId>
+            <artifactId>fxmlkit</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
         <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-fxml</artifactId>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>7.0.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

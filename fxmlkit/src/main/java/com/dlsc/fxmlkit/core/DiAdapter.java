@@ -76,7 +76,6 @@ package com.dlsc.fxmlkit.core;
  *
  * @see BaseDiAdapter
  * @see LiteDiAdapter
- * @see com.dlsc.fxmlkit.GuiceDiAdapter
  */
 public interface DiAdapter {
 

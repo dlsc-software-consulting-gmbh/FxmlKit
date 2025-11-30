@@ -2,7 +2,7 @@ package com.dlsc.fxmlkit.samples.tier3.multiuser;
 
 
 import com.dlsc.fxmlkit.core.DiAdapter;
-import com.dlsc.fxmlkit.samples.tier2.guice.GuiceDiAdapter;
+import com.dlsc.fxmlkit.guice.GuiceDiAdapter;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -63,7 +63,7 @@ public class MultiUserApp extends Application {
 
         VBox root = new VBox(header, subHeader, tabPane);
 
-        stage.setScene(new Scene(root, 400, 380));
+        stage.setScene(new Scene(root, 600, 380));
         stage.setTitle("FxmlKit - Tier 3 Demo");
         stage.show();
     }

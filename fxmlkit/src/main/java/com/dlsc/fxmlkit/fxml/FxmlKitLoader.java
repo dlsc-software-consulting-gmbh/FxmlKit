@@ -79,7 +79,7 @@ import java.util.logging.Logger;
  *   <li>FXML URL resolution results are cached globally</li>
  *   <li>Reflection results are cached by {@link InjectionUtils}</li>
  *   <li>Identity-based sets for object tracking (no equals/hashCode overhead)</li>
- *   <li>Early filtering of JDK internal classes</li>
+ *   <li>Early filtering via configurable skip package prefixes</li>
  *   <li>Unconditional injection relying on framework idempotency</li>
  * </ul>
  *
@@ -462,12 +462,34 @@ public final class FxmlKitLoader {
     }
 
     /**
+     * Checks if a class should be skipped based on package prefix.
+     *
+     * <p>This is a performance optimization to avoid unnecessary reflection
+     * checks on JDK/JavaFX internal classes.
+     *
+     * <p>The skip list is configurable via {@link FxmlKit#getSkipPackagePrefixes()}.
+     *
+     * @param cls the class to check
+     * @return true if the class should be skipped
+     */
+    private static boolean shouldSkipByPackage(Class<?> cls) {
+        String className = cls.getName();
+        List<String> prefixes = FxmlKit.getSkipPackagePrefixes();
+        for (String prefix : prefixes) {
+            if (className.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Determines if an object should receive dependency injection.
      *
      * <p>Decision algorithm:
      * <ol>
      *   <li>Filter out null objects</li>
-     *   <li>Filter out JDK internal classes (performance)</li>
+     *   <li>Filter out classes matching skip package prefixes (performance)</li>
      *   <li>Check exclude list and {@code @SkipInjection}</li>
      *   <li>Check include list and {@code @FxmlObject}</li>
      *   <li>Apply policy-based decision</li>
@@ -494,13 +516,8 @@ public final class FxmlKitLoader {
 
         Class<?> cls = obj.getClass();
 
-        // Filter JDK internal classes (performance optimization)
-        String className = cls.getName();
-        if (className.startsWith("java.") ||
-                className.startsWith("javax.") ||
-                className.startsWith("javafx.scene.text.") ||  // Exclude Text node content
-                className.startsWith("javafx.css.") ||
-                className.startsWith("javafx.beans.")) {
+        // Filter by configurable skip package prefixes
+        if (shouldSkipByPackage(cls)) {
             return false;
         }
 
