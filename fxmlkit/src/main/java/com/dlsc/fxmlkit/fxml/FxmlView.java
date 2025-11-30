@@ -249,8 +249,8 @@ public abstract class FxmlView<C> extends StackPane {
                         resources
                 );
 
-                this.loadedRoot = result.view();
-                this.controller = result.controller();
+                this.loadedRoot = result.getView();
+                this.controller = result.getController();
 
             } else {
                 // Tier 1: Zero-config mode

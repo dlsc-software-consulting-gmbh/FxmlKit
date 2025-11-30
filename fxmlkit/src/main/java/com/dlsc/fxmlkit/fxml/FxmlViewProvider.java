@@ -313,8 +313,8 @@ public abstract class FxmlViewProvider<T> {
                 resources
         );
 
-        this.view = result.view();
-        this.controller = result.controller();
+        this.view = result.getView();
+        this.controller = result.getController();
     }
 
     /**
@@ -357,19 +357,32 @@ public abstract class FxmlViewProvider<T> {
     /**
      * Holder for a loaded view and its controller.
      *
-     * @param <T>        the controller type
-     * @param view       the root node of the view (never null)
-     * @param controller the controller instance (maybe null if FXML has no controller)
+     * @param <T> the controller type
      */
-    public record ViewResult<T>(Parent view, T controller) {
+    public static class ViewResult<T> {
+        // Instead of using a record, we use a regular class for compatibility with older versions.
 
-        public Optional<T> getController() {
-            return Optional.ofNullable(controller);
+        /**
+         * The root node of the view (never null)
+         */
+        private final Parent view;
+
+        /**
+         * The controller instance (maybe null if FXML has no controller)
+         */
+        private final T controller;
+
+        public ViewResult(Parent view, T controller) {
+            this.view = view;
+            this.controller = controller;
         }
 
-        public T getRequiredController() {
-            return Optional.ofNullable(controller)
-                    .orElseThrow(() -> new IllegalStateException("No controller found"));
+        public Parent getView() {
+            return view;
+        }
+
+        public T getController() {
+            return controller;
         }
     }
 

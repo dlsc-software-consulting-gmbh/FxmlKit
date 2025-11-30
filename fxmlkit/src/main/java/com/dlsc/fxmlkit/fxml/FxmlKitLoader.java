@@ -696,7 +696,7 @@ public final class FxmlKitLoader {
     /**
      * Result of loading an FXML file with controller.
      *
-     * <p>This record encapsulates both the root view node and the controller instance,
+     * <p>This class encapsulates both the root view node and the controller instance,
      * providing convenient access to both without requiring a separate {@code getController()}
      * call.
      *
@@ -706,18 +706,39 @@ public final class FxmlKitLoader {
      *     injector, UserView.class
      * );
      *
-     * Parent view = result.view();
-     * UserController controller = result.controller();
+     * Parent view = result.getView();
+     * UserController controller = result.getController();
      *
      * controller.initialize(userData);
      * stage.setScene(new Scene(view));
      * }</pre>
      *
-     * @param <T>        the controller type
-     * @param view       the root node of the loaded FXML
-     * @param controller the controller instance (may be null if FXML has no controller)
+     * @param <T> the controller type
      */
-    public record LoadResult<T>(Parent view, T controller) {
+    public static class LoadResult<T> {
+        // Instead of using a record, we use a regular class for compatibility with older versions.
+
+        /**
+         * The root node of the loaded FXML
+         */
+        private final Parent view;
+        /**
+         * the controller instance (may be null if FXML has no controller)
+         */
+        private final T controller;
+
+        public LoadResult(Parent view, T controller) {
+            this.view = view;
+            this.controller = controller;
+        }
+
+        public Parent getView() {
+            return view;
+        }
+
+        public T getController() {
+            return controller;
+        }
     }
 
     /**
