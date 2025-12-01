@@ -268,7 +268,7 @@ stage.setScene(new Scene(new MainView()));
 
 ---
 
-### 方式二：可选依赖注入 (推荐企业应用)
+### 方式二：可选依赖注入
 
 **适用场景：** 需要依赖注入的桌面应用
 
@@ -319,7 +319,7 @@ public class MainController {
 
 ---
 
-### 方式三：独立 DI 容器 (推荐 JPro 多用户)
+### 方式三：独立 DI 容器
 
 **适用场景：** JPro Web 应用，每个用户需要独立数据
 
@@ -531,24 +531,30 @@ public class UserController {
 
 ---
 
-### Q: 何时使用，以及如何使用内置的 LiteDiAdapter？
+### Q: 何时使用内置的 LiteDiAdapter？
 
-**A: 如果你需要简单的依赖注入，但又不想引入 Guice 等完整的 DI 框架，那么内置的 LiteDiAdapter 非常适合你。**
+**A:** LiteDiAdapter 是一个简单的 DI 容器，适合小型项目和学习场景。
 
-LiteDiAdapter 是一个轻量级的依赖注入适配器，适合：
-- 小型项目或原型开发
-- 依赖关系简单的应用
-- 不想增加额外依赖的场景
+**依赖要求：**
+```xml
+<dependency>
+    <groupId>javax.inject</groupId>
+    <artifactId>javax.inject</artifactId>
+    <version>1</version>
+</dependency>
+```
 
 **使用示例：**
 ```java
+import javax.inject.Inject;
+
 LiteDiAdapter di = new LiteDiAdapter();
 di.bindInstance(UserService.class, new UserService());
-di.bindInstance(ConfigService.class, new ConfigService());
 FxmlKit.setDiAdapter(di);
 ```
 
-**局限性：** LiteDiAdapter 只支持实例绑定，不支持构造函数注入、作用域管理等高级特性。如果需要这些功能，建议使用 Guice 或其他成熟的 DI 框架。
+**何时使用：** 小型项目、学习、原型开发  
+**何时升级：** 项目变大或需要高级特性时，建议使用 Guice 或其他成熟 DI 框架
 
 ---
 
@@ -558,7 +564,7 @@ FxmlKit.setDiAdapter(di);
 
 **解决：** 配置 DiAdapter：
 ```java
-FxmlKit.setDiAdapter(new LiteDiAdapter());
+FxmlKit.setDiAdapter(diAdapter);
 ```
 
 ---

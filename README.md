@@ -141,14 +141,15 @@ FxmlKit's convention-over-configuration approach (auto-resolving FXML/CSS by cla
 implementation 'com.dlsc.fxmlkit:fxmlkit:1.0.0'
 ```
 
-**If using Guice:**
+**If you need to use Guice for dependency injection:** Directly depend on `fxmlkit-guice` (includes core module)
+
+**Maven:**
 ```xml
 <dependency>
     <groupId>com.dlsc.fxmlkit</groupId>
     <artifactId>fxmlkit-guice</artifactId>
     <version>1.0.0</version>
 </dependency>
-
 <dependency>
     <groupId>com.google.inject</groupId>
     <artifactId>guice</artifactId>
@@ -156,7 +157,13 @@ implementation 'com.dlsc.fxmlkit:fxmlkit:1.0.0'
 </dependency>
 ```
 
-**If using other DI frameworks:** Continue using the core `fxmlkit` module and implement the `DiAdapter` interface or extend the `BaseDiAdapter` class. Even with Guice, you can choose not to depend on the `fxmlkit-guice` module and implement a `GuiceDiAdapter` yourself (refer to `fxmlkit-guice` source code - the implementation is very simple).
+**Gradle:**
+```gradle
+implementation 'com.dlsc.fxmlkit:fxmlkit-guice:1.0.0'
+implementation 'com.google.inject:guice:7.0.0'
+```
+
+**If you need to use other DI frameworks:** Continue using the core `fxmlkit` module and implement the `DiAdapter` interface or extend the `BaseDiAdapter` class. Similarly, even when using Guice, you can choose not to depend on the `fxmlkit-guice` module and implement a `GuiceDiAdapter` yourself (refer to `fxmlkit-guice` source code - the implementation is very simple).
 
 ---
 
@@ -164,61 +171,68 @@ implementation 'com.dlsc.fxmlkit:fxmlkit:1.0.0'
 
 **1. Create FXML File**
 
-`src/main/resources/com/example/LoginView.fxml`
+`src/main/resources/com/example/HelloView.fxml`:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.control.*?>
 
-<VBox xmlns:fx="http://javafx.com/fxml" spacing="10">
-    <TextField fx:id="usernameField" promptText="Username"/>
-    <PasswordField fx:id="passwordField" promptText="Password"/>
-    <Button text="Login" onAction="#handleLogin"/>
+<VBox xmlns:fx="http://javafx.com/fxml" 
+      fx:controller="com.example.HelloController"
+      spacing="10" alignment="CENTER">
+    <Label fx:id="messageLabel" text="Hello, FxmlKit!"/>
+    <Button text="Click Me" onAction="#handleClick"/>
 </VBox>
 ```
 
 **2. Create Controller**
 
+`src/main/java/com/example/HelloController.java`:
 ```java
 package com.example;
 
-public class LoginController {
-    @FXML private TextField usernameField;
-    @FXML private PasswordField passwordField;
+import javafx.fxml.FXML;
+import javafx.scene.control.*;
+
+public class HelloController {
+    @FXML private Label messageLabel;
     
     @FXML
-    private void handleLogin() {
-        String username = usernameField.getText();
-        String password = passwordField.getText();
-        // Handle login logic
+    private void handleClick() {
+        messageLabel.setText("Hello from FxmlKit!");
     }
 }
 ```
 
 **3. Create View**
 
+`src/main/java/com/example/HelloView.java`:
 ```java
 package com.example;
 
-import com.dlsc.fxmlkit.FxmlView;
+import com.dlsc.fxmlkit.fxml.FxmlView;
 
-public class LoginView extends FxmlView<LoginController> {
-    // That's it! FXML is automatically loaded
+public class HelloView extends FxmlView<HelloController> {
+    // That's it!
 }
 ```
 
 **4. Use View**
 
 ```java
-public class App extends Application {
+public class HelloApp extends Application {
     @Override
     public void start(Stage stage) {
-        LoginView loginView = new LoginView();
-        Scene scene = new Scene(loginView);
-        stage.setScene(scene);
+        stage.setScene(new Scene(new HelloView()));
+        stage.setTitle("FxmlKit Demo");
         stage.show();
     }
 }
+```
+
+**Optional: Add Stylesheet**
+
+Create `src/main/resources/com/example/HelloView.css`, and FxmlKit will automatically attach it!
 ```
 
 ---
@@ -227,18 +241,17 @@ public class App extends Application {
 
 FxmlKit supports three usage patterns - choose based on your needs:
 
-### Method 1: Zero Configuration (Recommended for Beginners)
+### Method 1: Zero Configuration
 
-No DI framework required, automatic FXML loading and stylesheet attachment.
+**Use Case:** Learning JavaFX, quick prototyping, simple applications
 
 ```java
-public class LoginView extends FxmlView<LoginController> {
-    // FXML automatically loaded and bound to controller
+public class MainView extends FxmlView<MainController> {
 }
 
 // Usage
-LoginView view = new LoginView();
-Scene scene = new Scene(view);
+stage.setScene(new Scene(new MainView()));
+```
 ```
 
 **Features:**
@@ -249,9 +262,9 @@ Scene scene = new Scene(view);
 
 ---
 
-### Method 2: Optional Dependency Injection (Recommended for Enterprise)
+### Method 2: Optional Dependency Injection
 
-Set up a global DI adapter once, and all views automatically support dependency injection.
+**Use Case:** Desktop applications that need dependency injection
 
 ```java
 // Application startup - set global DI adapter
@@ -280,9 +293,9 @@ LoginView view = new LoginView();
 
 ---
 
-### Method 3: Independent DI Container (Recommended for JPro Multi-User)
+### Method 3: Independent DI Container
 
-Each view uses an independent DI container, suitable for scenarios requiring data isolation (e.g., JPro multi-user web applications).
+**Use Case:** JPro web applications where each user needs isolated data
 
 ```java
 // Create independent DI container for each user session
@@ -486,34 +499,41 @@ public class UserProfileController {
 
 ---
 
-### Q: When and how to use the built-in LiteDiAdapter?
+### Q: When to use the built-in LiteDiAdapter?
 
-**A:** If you need simple dependency injection but don't want to introduce Guice or other complete DI frameworks, the built-in LiteDiAdapter is perfect for you.
+**A:** LiteDiAdapter is a simple DI container for small projects and learning scenarios.
 
-**Suitable for:**
-- Small projects or prototyping
-- Applications with simple dependencies
-- Scenarios where you don't want additional dependencies
-
-**Limitations:** LiteDiAdapter only supports instance binding and doesn't support constructor injection, scope management, or other advanced features. If you need these, use Guice or other mature DI frameworks.
+**Dependency Required:**
+```xml
+<dependency>
+    <groupId>javax.inject</groupId>
+    <artifactId>javax.inject</artifactId>
+    <version>1</version>
+</dependency>
+```
 
 **Usage:**
 ```java
+import javax.inject.Inject;
+
 LiteDiAdapter di = new LiteDiAdapter();
 di.bindInstance(UserService.class, new UserService());
-di.bindInstance(ConfigService.class, new ConfigService());
 FxmlKit.setDiAdapter(di);
 ```
+
+**When to use:** Small projects, learning, prototyping  
+**When to upgrade:** For larger projects or advanced features, use Guice or other mature DI frameworks
 
 ---
 
 ### Q: Why are @Inject fields null?
 
-**A:** Common causes:
+**Reason:** Zero-configuration mode (Method 1) doesn't support dependency injection.
 
-1. **No DI adapter set** - Call `FxmlKit.setDiAdapter()`
-2. **Object not in DI container** - Ensure the object is bound in your DI configuration
-3. **Custom node not marked with @FxmlObject** - FXML nodes need `@FxmlObject` annotation (unless using AUTO strategy)
+**Solution:** Configure a DiAdapter:
+```java
+FxmlKit.setDiAdapter(diAdapter);
+```
 
 ---
 
