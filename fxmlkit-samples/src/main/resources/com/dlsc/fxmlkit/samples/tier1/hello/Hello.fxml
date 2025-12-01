@@ -6,7 +6,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <VBox alignment="CENTER" spacing="20"
-      xmlns:fx="http://javafx.com/fxml" stylesheets="@Hello.css"
+      xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.dlsc.fxmlkit.samples.tier1.hello.HelloController">
 
     <Label text="FxmlKit - Tier 1 Demo" styleClass="title-label"/>
