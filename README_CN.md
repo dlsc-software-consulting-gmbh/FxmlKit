@@ -366,8 +366,6 @@ src/main/resources/com/example/
 
 **约定：** FXML 文件与 Java 类同名，放在同一资源目录下。
 
-详细的解析规则、优先级和自定义路径配置请参考 [Wiki - 文件解析](https://github.com/dlsc-software-consulting-gmbh/FxmlKit/wiki)。
-
 ### FxmlView vs FxmlViewProvider
 
 | 特性 | FxmlView | FxmlViewProvider |
@@ -422,8 +420,6 @@ public class StatusCard extends VBox {
 
 FxmlKit 默认使用 `EXPLICIT_ONLY` 策略（仅注入标记 `@FxmlObject` 的对象）。
 
-如需了解其他注入策略（AUTO、DISABLED）及详细配置，请参考 [Wiki - 注入策略](https://github.com/dlsc-software-consulting-gmbh/FxmlKit/wiki)。
-
 ---
 
 ## 注解
@@ -438,8 +434,6 @@ FxmlKit 默认使用 `EXPLICIT_ONLY` 策略（仅注入标记 `@FxmlObject` 的�
 @FxmlPath("/shared/Common.fxml")
 public class LoginView extends FxmlView<LoginController> {}
 ```
-
-详细用法和路径解析规则请参考 [Wiki - FXML 路径配置](https://github.com/dlsc-software-consulting-gmbh/FxmlKit/wiki)。
 
 ---
 

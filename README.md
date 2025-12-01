@@ -320,8 +320,6 @@ src/main/resources/com/example/
 
 **Convention:** FXML file has the same name as Java class and is in the same resource directory.
 
-For detailed resolution rules, priorities, and custom path configuration, see [Wiki - File Resolution](https://github.com/dlsc-software-consulting-gmbh/FxmlKit/wiki).
-
 ---
 
 ### FxmlView vs FxmlViewProvider
@@ -382,8 +380,6 @@ Use in FXML:
 
 FxmlKit defaults to `EXPLICIT_ONLY` strategy (only injects objects marked with `@FxmlObject`).
 
-For other injection strategies (AUTO, DISABLED) and detailed configuration, see [Wiki - Injection Strategy](https://github.com/dlsc-software-consulting-gmbh/FxmlKit/wiki).
-
 ---
 
 ## Annotations
@@ -398,8 +394,6 @@ For other injection strategies (AUTO, DISABLED) and detailed configuration, see 
 @FxmlPath("/shared/Common.fxml")
 public class LoginView extends FxmlView<LoginController> {}
 ```
-
-For detailed usage and path resolution rules, see [Wiki - FXML Path Configuration](https://github.com/dlsc-software-consulting-gmbh/FxmlKit/wiki).
 
 ---
 
