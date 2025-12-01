@@ -229,7 +229,7 @@ public final class FxmlKitLoader {
             Parent root = loader.load();
 
             // Inject dependencies into all collected objects
-            if (FxmlKit.getNodeInjectionPolicy() != FxmlInjectionPolicy.DISABLED) {
+            if (FxmlKit.getFxmlInjectionPolicy() != FxmlInjectionPolicy.DISABLED) {
                 injectAll(di, loader, context.getAllObjects(), trackedControllers);
             } else {
                 // When policy is DISABLED, only process controllers
@@ -317,7 +317,7 @@ public final class FxmlKitLoader {
             T controller = (T) loader.getController();
 
             // Inject dependencies into all collected objects
-            if (FxmlKit.getNodeInjectionPolicy() != FxmlInjectionPolicy.DISABLED) {
+            if (FxmlKit.getFxmlInjectionPolicy() != FxmlInjectionPolicy.DISABLED) {
                 injectAll(di, loader, context.getAllObjects(), trackedControllers);
             } else {
                 // When policy is DISABLED, only process controllers
@@ -366,7 +366,7 @@ public final class FxmlKitLoader {
      */
     private static void injectAll(DiAdapter di, FXMLLoader loader, Set<Object> allObjects,
                                   Set<Object> trackedControllers) {
-        FxmlInjectionPolicy policy = FxmlKit.getNodeInjectionPolicy();
+        FxmlInjectionPolicy policy = FxmlKit.getFxmlInjectionPolicy();
         Set<Class<?>> includeTypes = FxmlKit.getIncludeNodeTypes();
         Set<Class<?>> excludeTypes = FxmlKit.getExcludeNodeTypes();
 

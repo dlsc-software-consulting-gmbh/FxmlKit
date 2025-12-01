@@ -47,6 +47,9 @@ import java.util.logging.Logger;
  * injector.bindInstance(UserService.class, new UserService());
  * FxmlKit.setDiAdapter(injector);  // Enable DI globally
  *
+ * // Optional: Enable debug logging
+ * FxmlKit.setLogLevel(Level.FINE);
+ *
  * // Then use normally
  * MainView view = new MainView();
  * Parent root = view.getView();  // Full DI support
@@ -142,31 +145,29 @@ public final class FxmlKit {
     private FxmlKit() {
     }
 
-    // Logging Configuration
-
-    /**
-     * Enables development mode with verbose logging.
-     */
-    public static void enableDevelopmentMode() {
-        setLogLevel(Level.FINE);
-    }
-
-    /**
-     * Enables production mode with minimal logging (default).
-     */
-    public static void enableProductionMode() {
-        setLogLevel(Level.WARNING);
-    }
-
-    /**
-     * Enables silent mode with no logging.
-     */
-    public static void enableSilentMode() {
-        setLogLevel(Level.OFF);
-    }
-
     /**
      * Sets the logging level for all FxmlKit components.
+     *
+     * <p>Common levels:
+     * <ul>
+     *   <li>{@link Level#WARNING} - Production (default, minimal logging)</li>
+     *   <li>{@link Level#FINE} - Development/debugging (verbose logging)</li>
+     *   <li>{@link Level#OFF} - Silent mode (no logging)</li>
+     *   <li>{@link Level#INFO} - General information</li>
+     *   <li>{@link Level#SEVERE} - Only critical errors</li>
+     * </ul>
+     *
+     * <p>Examples:
+     * <pre>{@code
+     * // Production (default)
+     * FxmlKit.setLogLevel(Level.WARNING);
+     *
+     * // Development/debugging
+     * FxmlKit.setLogLevel(Level.FINE);
+     *
+     * // Silent mode
+     * FxmlKit.setLogLevel(Level.OFF);
+     * }</pre>
      *
      * @param level the logging level (must not be null)
      */
@@ -184,23 +185,34 @@ public final class FxmlKit {
     /**
      * Gets the current global logging level.
      *
+     * <p>Default is {@link Level#WARNING}.
+     *
      * @return the current logging level
      */
     public static Level getLogLevel() {
         return globalLogLevel;
     }
 
-    // DI Adapter Configuration
-
     /**
      * Sets the global dependency injection adapter.
      *
      * <p>Three-Tier Usage:
      * <ul>
-     *   <li>Tier 1: Don't call this (or pass null) for zero-config mode</li>
-     *   <li>Tier 2: Set once globally for shared DI across all views</li>
-     *   <li>Tier 3: Use injector.getInstance(View.class) for isolated DI</li>
+     *   <li><b>Tier 1 (Zero-Config):</b> Don't call this method (or pass null) - no DI</li>
+     *   <li><b>Tier 2 (Global DI):</b> Set once globally for shared DI across all views</li>
+     *   <li><b>Tier 3 (Isolated DI):</b> Use injector.getInstance(View.class) for per-user DI</li>
      * </ul>
+     *
+     * <p>Examples:
+     * <pre>{@code
+     * // Tier 1: Zero-config mode (no DI)
+     * FxmlKit.setDiAdapter(null);  // Or don't call this method at all
+     *
+     * // Tier 2: Global DI mode
+     * LiteDiAdapter adapter = new LiteDiAdapter();
+     * adapter.bindInstance(UserService.class, new UserService());
+     * FxmlKit.setDiAdapter(adapter);
+     * }</pre>
      *
      * @param adapter the DI adapter to use, or null for zero-config mode
      */
@@ -223,6 +235,14 @@ public final class FxmlKit {
      *   <li><b>Tier 3:</b> Serves as fallback when instance-level adapter is not set</li>
      * </ul>
      *
+     * <p>Example:
+     * <pre>{@code
+     * // Check if in zero-config mode
+     * if (FxmlKit.getDiAdapter() == null) {
+     *     System.out.println("Zero-config mode - no DI");
+     * }
+     * }</pre>
+     *
      * @return the current DI adapter, or null if none configured
      */
     public static DiAdapter getDiAdapter() {
@@ -230,52 +250,19 @@ public final class FxmlKit {
     }
 
     /**
-     * Checks if FxmlKit is in zero-configuration mode (Tier 1).
-     *
-     * <p>In zero-config mode:
-     * <ul>
-     *   <li>FXML files load normally</li>
-     *   <li>CSS/BSS files attach automatically</li>
-     *   <li>Controllers created with no-arg constructor</li>
-     *   <li>@Inject fields are NOT injected (remain null)</li>
-     *   <li>@PostInject methods are NOT called</li>
-     *   <li>@FxmlObject nodes are NOT processed</li>
-     * </ul>
-     *
-     * @return true if no DI adapter configured
-     */
-    public static boolean isZeroConfigMode() {
-        return globalDiAdapter == null;
-    }
-
-    /**
-     * Explicitly enables zero-configuration mode (Tier 1).
-     *
-     * <p>Clears any configured DiAdapter, causing views to load without
-     * dependency injection.
-     */
-    public static void enableZeroConfigMode() {
-        globalDiAdapter = null;
-    }
-
-    // Stylesheet Configuration
-
-    /**
-     * Enables automatic stylesheet attachment.
-     */
-    public static void enableAutoAttachStyles() {
-        autoAttachStyles = true;
-    }
-
-    /**
-     * Disables automatic stylesheet attachment.
-     */
-    public static void disableAutoAttachStyles() {
-        autoAttachStyles = false;
-    }
-
-    /**
      * Sets whether stylesheets should be automatically attached.
+     *
+     * <p>When enabled (default), FxmlKit automatically attaches CSS/BSS files
+     * that match the view class name.
+     *
+     * <p>Examples:
+     * <pre>{@code
+     * // Enable auto-attach (default)
+     * FxmlKit.setAutoAttachStyles(true);
+     *
+     * // Disable auto-attach
+     * FxmlKit.setAutoAttachStyles(false);
+     * }</pre>
      *
      * @param enabled true to enable auto-attach, false to disable
      */
@@ -286,26 +273,38 @@ public final class FxmlKit {
     /**
      * Checks if automatic stylesheet attachment is enabled.
      *
+     * <p>Default is {@code true}.
+     *
      * @return true if auto-attach is enabled
      */
     public static boolean isAutoAttachStyles() {
         return autoAttachStyles;
     }
 
-    // Node Injection Policy
-
     /**
-     * Sets the node injection policy.
+     * Sets the FXML node injection policy.
      *
-     * <p>Policies:
+     * <p>Available policies:
      * <ul>
-     *   <li>EXPLICIT_ONLY - Only @FxmlObject nodes (default)</li>
-     *   <li>AUTO - Auto-detect nodes with @Inject</li>
-     *   <li>DISABLED - Only inject controllers</li>
+     *   <li><b>EXPLICIT_ONLY</b> - Only inject nodes marked with @FxmlObject (default)</li>
+     *   <li><b>AUTO</b> - Auto-detect nodes with @Inject annotations</li>
+     *   <li><b>DISABLED</b> - Only inject controllers, skip all nodes</li>
      * </ul>
      *
      * <p><b>Note:</b> In zero-config mode (Tier 1), this policy is ignored
      * as no dependency injection occurs.
+     *
+     * <p>Examples:
+     * <pre>{@code
+     * // Default: Only @FxmlObject nodes
+     * FxmlKit.setFxmlInjectionPolicy(FxmlInjectionPolicy.EXPLICIT_ONLY);
+     *
+     * // Auto-detect: Any node with @Inject
+     * FxmlKit.setFxmlInjectionPolicy(FxmlInjectionPolicy.AUTO);
+     *
+     * // Disabled: Only controllers
+     * FxmlKit.setFxmlInjectionPolicy(FxmlInjectionPolicy.DISABLED);
+     * }</pre>
      *
      * @param policy the policy to use (must not be null)
      */
@@ -314,11 +313,13 @@ public final class FxmlKit {
     }
 
     /**
-     * Gets the current node injection policy.
+     * Gets the current FXML node injection policy.
+     *
+     * <p>Default is {@link FxmlInjectionPolicy#EXPLICIT_ONLY}.
      *
      * @return the current policy
      */
-    public static FxmlInjectionPolicy getNodeInjectionPolicy() {
+    public static FxmlInjectionPolicy getFxmlInjectionPolicy() {
         return fxmlInjectionPolicy;
     }
 
@@ -328,104 +329,88 @@ public final class FxmlKit {
      * <p>Classes in these packages are skipped for performance optimization,
      * avoiding unnecessary reflection checks on JDK/JavaFX internal classes.
      *
-     * <p>The returned list is mutable. Modify directly if needed (rare case):
+     * <p><b>Default prefixes:</b>
+     * <ul>
+     *   <li>java.*</li>
+     *   <li>javax.*</li>
+     *   <li>javafx.*</li>
+     *   <li>jdk.*</li>
+     *   <li>sun.*</li>
+     *   <li>com.sun.*</li>
+     * </ul>
      *
+     * <p>The returned list is mutable. Modify directly if needed (rare case):
      * <pre>{@code
-     * // If your package is java.study.day01:
+     * // Example: If your package is java.study.day01
      * FxmlKit.getSkipPackagePrefixes().remove("java.");
      * FxmlKit.getSkipPackagePrefixes().add("java.lang.");
      * FxmlKit.getSkipPackagePrefixes().add("java.util.");
+     * FxmlKit.getSkipPackagePrefixes().add("java.io.");
      * }</pre>
      *
-     * @return the mutable list of skip package prefixes
+     * @return mutable list of skip package prefixes
      */
     public static List<String> getSkipPackagePrefixes() {
         return SKIP_PACKAGE_PREFIXES;
     }
 
-    // Include/Exclude Node Types
-
     /**
-     * Adds a node type to the injection include list.
+     * Gets the set of node types to exclude from injection.
      *
-     * <p>Nodes of this type will always receive dependency injection,
-     * regardless of policy (except DISABLED) or @FxmlObject annotation.
-     *
-     * @param nodeType the node type to include (must not be null)
-     */
-    public static void includeNodeType(Class<?> nodeType) {
-        INCLUDE_NODE_TYPES.add(Objects.requireNonNull(nodeType, "Node type cannot be null"));
-    }
-
-    /**
-     * Removes a node type from the injection include list.
-     *
-     * @param nodeType the node type to remove
-     */
-    public static void removeIncludeNodeType(Class<?> nodeType) {
-        INCLUDE_NODE_TYPES.remove(nodeType);
-    }
-
-    /**
-     * Checks if a node type is in the include list.
-     *
-     * @param nodeType the node type to check
-     * @return true if the type is included
-     */
-    public static boolean isIncludedNodeType(Class<?> nodeType) {
-        return INCLUDE_NODE_TYPES.contains(nodeType);
-    }
-
-    /**
-     * Gets all included node types (unmodifiable).
-     *
-     * @return unmodifiable set of included node types
-     */
-    public static Set<Class<?>> getIncludeNodeTypes() {
-        return Set.copyOf(INCLUDE_NODE_TYPES);
-    }
-
-    /**
-     * Adds a node type to the injection exclude list.
-     *
-     * <p>Nodes of this type will never receive dependency injection,
+     * <p>Nodes of these types will never receive dependency injection,
      * even if they have @FxmlObject or are in the include list.
      *
-     * @param nodeType the node type to exclude (must not be null)
-     */
-    public static void excludeNodeType(Class<?> nodeType) {
-        EXCLUDE_NODE_TYPES.add(Objects.requireNonNull(nodeType, "Node type cannot be null"));
-    }
-
-    /**
-     * Removes a node type from the injection exclude list.
+     * <p>The returned set is mutable and thread-safe. Modify directly:
+     * <pre>{@code
+     * // Add exclusions
+     * FxmlKit.getExcludeNodeTypes().add(Button.class);
+     * FxmlKit.getExcludeNodeTypes().add(Label.class);
      *
-     * @param nodeType the node type to remove
-     */
-    public static void removeExcludeNodeType(Class<?> nodeType) {
-        EXCLUDE_NODE_TYPES.remove(nodeType);
-    }
-
-    /**
-     * Checks if a node type is in the exclude list.
+     * // Remove exclusion
+     * FxmlKit.getExcludeNodeTypes().remove(Button.class);
      *
-     * @param nodeType the node type to check
-     * @return true if the type is excluded
-     */
-    public static boolean isExcludedNodeType(Class<?> nodeType) {
-        return EXCLUDE_NODE_TYPES.contains(nodeType);
-    }
-
-    /**
-     * Gets all excluded node types (unmodifiable).
+     * // Check exclusion
+     * if (FxmlKit.getExcludeNodeTypes().contains(Button.class)) {
+     *     // Button is excluded
+     * }
      *
-     * @return unmodifiable set of excluded node types
+     * // Bulk operations
+     * FxmlKit.getExcludeNodeTypes().addAll(List.of(Button.class, Label.class));
+     * FxmlKit.getExcludeNodeTypes().clear();
+     * }</pre>
+     *
+     * @return mutable thread-safe set of excluded node types
      */
     public static Set<Class<?>> getExcludeNodeTypes() {
-        return Set.copyOf(EXCLUDE_NODE_TYPES);
+        return EXCLUDE_NODE_TYPES;
     }
 
-    // Reset
+    /**
+     * Gets the set of node types to include for injection.
+     *
+     * <p>Nodes of these types will always receive dependency injection,
+     * regardless of policy (except DISABLED) or @FxmlObject annotation.
+     *
+     * <p>The returned set is mutable and thread-safe. Modify directly:
+     * <pre>{@code
+     * // Add inclusions
+     * FxmlKit.getIncludeNodeTypes().add(MyCustomNode.class);
+     * FxmlKit.getIncludeNodeTypes().add(AnotherNode.class);
+     *
+     * // Remove inclusion
+     * FxmlKit.getIncludeNodeTypes().remove(MyCustomNode.class);
+     *
+     * // Check inclusion
+     * if (FxmlKit.getIncludeNodeTypes().contains(MyCustomNode.class)) {
+     *     // MyCustomNode is included
+     * }
+     * }</pre>
+     *
+     * @return mutable thread-safe set of included node types
+     */
+    public static Set<Class<?>> getIncludeNodeTypes() {
+        return INCLUDE_NODE_TYPES;
+    }
 
     /**
      * Resets all FxmlKit configuration to defaults.
@@ -440,7 +425,20 @@ public final class FxmlKit {
      *   <li>Skip package prefixes to defaults</li>
      * </ul>
      *
-     * <p>Use case: Testing, or resetting between user sessions.
+     * <p>Use cases:
+     * <ul>
+     *   <li>Testing (reset between test cases)</li>
+     *   <li>Resetting between user sessions</li>
+     *   <li>Debugging (return to known state)</li>
+     * </ul>
+     *
+     * <p>Example:
+     * <pre>{@code
+     * @AfterEach
+     * void tearDown() {
+     *     FxmlKit.resetAll();  // Clean slate for next test
+     * }
+     * }</pre>
      */
     public static void resetAll() {
         globalDiAdapter = null;
