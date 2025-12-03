@@ -6,8 +6,8 @@
 
     <modules>
         <module>fxmlkit</module>
-        <module>fxmlkit-samples</module>
         <module>fxmlkit-guice</module>
+        <module>fxmlkit-samples</module>
     </modules>
     <groupId>com.dlsc.fxmlkit</groupId>
     <artifactId>parent</artifactId>
