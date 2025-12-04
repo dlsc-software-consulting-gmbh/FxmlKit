@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>FxmlKit</name>
-    <description>A collection of utilities to work with FXML in JavaFX.</description>
+    <description>Java FXML framework with convention-over-configuration and optional dependency injection.</description>
 
     <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
     <scm>
