@@ -19,6 +19,11 @@
     <scm>
         <url>https://github.com/dlsc-software-consulting-gmbh/FxmlKit</url>
     </scm>
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <licenses>
         <license>
             <name>Apache 2.0</name>
