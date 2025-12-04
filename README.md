@@ -32,7 +32,7 @@ A modern JavaFX FXML framework that eliminates boilerplate code and provides opt
 
 ---
 
-## Why FxmlKit
+## Why FxmlKit?
 
 ### Pain Point 1: Native FXML Loading Requires Massive Boilerplate
 
@@ -233,7 +233,6 @@ public class HelloApp extends Application {
 **Optional: Add Stylesheet**
 
 Create `src/main/resources/com/example/HelloView.css`, and FxmlKit will automatically attach it!
-```
 
 ---
 
@@ -251,7 +250,6 @@ public class MainView extends FxmlView<MainController> {
 
 // Usage
 stage.setScene(new Scene(new MainView()));
-```
 ```
 
 **Features:**
