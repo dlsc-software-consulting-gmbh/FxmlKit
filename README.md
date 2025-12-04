@@ -335,28 +335,32 @@ src/main/resources/com/example/
 
 ### FxmlView vs FxmlViewProvider
 
-**FxmlView:** Inherit for simple views, FXML is the view root node
+| Feature | FxmlView | FxmlViewProvider |
+|---------|----------|------------------|
+| **Type** | IS-A Node (extends StackPane) | HAS-A Node (holds Parent) |
+| **Loading** | Eager (loads immediately) | Lazy (loads on first `getView()`) |
+| **Usage** | Direct use as Node | Call `getView()` to get Node |
+| **Use Case** | Used directly as a node | Lazy loading to save resources |
 
+**FxmlView Example:**
 ```java
 public class LoginView extends FxmlView<LoginController> {
 }
 
-// Usage
-LoginView view = new LoginView();  // view itself is VBox (FXML root)
-scene.setRoot(view);
+// Usage - direct use as a Node
+LoginView view = new LoginView();  // FXML loaded immediately
+scene.setRoot(view);  // view itself is a StackPane
 ```
 
-**FxmlViewProvider:** Use for complex layouts where FXML is embedded as a child node
-
+**FxmlViewProvider Example:**
 ```java
 public class MainViewProvider extends FxmlViewProvider<MainController> {
-    public MainViewProvider() {
-        BorderPane root = new BorderPane();
-        root.setCenter(getView());  // FXML content
-        root.setTop(createToolbar());
-        setRoot(root);
-    }
 }
+
+// Usage - need to call getView()
+MainViewProvider provider = new MainViewProvider();  // FXML not loaded yet
+Parent view = provider.getView();  // FXML loaded here
+scene.setRoot(view);
 ```
 
 ---

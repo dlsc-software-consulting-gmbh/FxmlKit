@@ -370,25 +370,29 @@ src/main/resources/com/example/
 
 | 特性 | FxmlView | FxmlViewProvider |
 |------|----------|------------------|
-| 用法 | IS-A (继承节点) | HAS-A (组合模式) |
-| 直接使用 | ✅ `new MainView()` | ❌ 需要 `getView()` |
-| 场景 | 直接作为节点使用 | 需要延迟加载或更多控制 |
+| **类型** | IS-A Node (继承 StackPane) | HAS-A Node (持有 Parent) |
+| **加载** | 立即加载（构造时） | 惰性加载（首次调用 `getView()`） |
+| **使用** | 直接作为 Node 使用 | 需要调用 `getView()` 获取 Node |
+| **适用场景** | 直接作为节点使用	 | 延迟加载，节省资源 |
 
 **FxmlView 示例：**
 ```java
-public class MainView extends FxmlView<MainController> {}
+public class LoginView extends FxmlView<LoginController> {
+}
 
-// 直接使用
-stage.setScene(new Scene(new MainView()));
+// 使用 - 直接作为 Node
+LoginView view = new LoginView();  // FXML 立即加载
+stage.setScene(new Scene(view));   // view 本身是 StackPane
 ```
 
 **FxmlViewProvider 示例：**
 ```java
-public class MainViewProvider extends FxmlViewProvider<MainController> {}
+public class MainViewProvider extends FxmlViewProvider<MainController> {
+}
 
-// 需要调用 getView()
-MainViewProvider provider = new MainViewProvider();
-Parent view = provider.getView();
+// 使用 - 需要调用 getView()
+MainViewProvider provider = new MainViewProvider();  // FXML 尚未加载
+Parent view = provider.getView();  // 这里才加载 FXML
 stage.setScene(new Scene(view));
 ```
 
