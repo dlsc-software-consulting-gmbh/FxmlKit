@@ -541,24 +541,55 @@ FxmlKit.setDiAdapter(diAdapter);
 
 ### Q: When does @PostInject method execute?
 
-**A:** Immediately after all `@Inject` field injections are complete.
+**A:** After dependency injection completes. The timing differs between controllers and nodes:
 
+#### For Controllers
+
+**Execution order:** `Constructor → @Inject → @FXML → initialize() → @PostInject`
+
+Usually **not needed** - use `initialize()` instead:
 ```java
-public class LoginController {
+public class LoginController implements Initializable {
     @Inject private UserService userService;  // ① Injected
+    @FXML private Button loginButton;          // ② Injected by JavaFX
+    
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        // ③ Both @Inject and @FXML available here
+        loginButton.setOnAction(e -> userService.login());
+    }
     
     @PostInject
     private void afterInject() {
-        // ② Executes here - userService is ready
-        userService.loadData();
-    }
-    
-    @FXML
-    private void initialize() {
-        // ③ Then JavaFX's initialize()
+        // ④ Called after initialize() - usually not needed for controllers
+        userService.loadSettings();  // Example: if you need it
     }
 }
 ```
+
+#### For @FxmlObject Nodes
+
+**Execution order:** `Constructor → @Inject → @PostInject`
+
+**Required** if you need injected dependencies:
+```java
+@FxmlObject
+public class StatusLabel extends Label {
+    @Inject private StatusService statusService;
+    
+    public StatusLabel() {
+        // ① Constructor - statusService is null here ❌
+    }
+    
+    @PostInject
+    private void afterInject() {
+        // ② Injected - statusService available now ✅
+        setText(statusService.getStatus());
+    }
+}
+```
+
+**Rule:** Use `@PostInject` for initialization requiring `@Inject` dependencies in `@FxmlObject` nodes.
 
 ---
 

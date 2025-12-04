@@ -573,24 +573,59 @@ FxmlKit.setDiAdapter(diAdapter);
 
 ---
 
-### Q: @PostInject 方法什么时候执行？
+### 问：@PostInject 方法何时执行？
 
-**A: 在所有 @Inject 字段注入完成后立即执行。**
+**答：** 在依赖注入完成后执行。Controllers 和节点的执行时机不同：
 
-这意味着在 `@PostInject` 方法中，你可以安全地使用所有注入的依赖：
+#### 对于 Controllers
+
+**执行顺序：** `Constructor → @Inject → @FXML → initialize() → @PostInject`
+
+通常**不需要** - 直接使用 `initialize()` 即可：
 
 ```java
-public class UserController {
-    @Inject private UserService userService;
-    @Inject private ConfigService configService;
+public class LoginController implements Initializable {
+    @Inject private UserService userService;  // ① 注入
+    @FXML private Button loginButton;          // ② JavaFX 注入
+    
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        // ③ @Inject 和 @FXML 字段都已可用
+        loginButton.setOnAction(e -> userService.login());
+    }
     
     @PostInject
     private void afterInject() {
-        // ✅ userService 和 configService 已就绪
-        userService.loadData();
+        // ④ 在 initialize() 之后调用 - 对于 controllers 通常不需要
+        userService.loadSettings();  // 示例：如果确实需要
     }
 }
 ```
+
+#### 对于 @FxmlObject 节点
+
+**执行顺序：** `Constructor → @Inject → @PostInject`
+
+如果需要使用注入的依赖，则**必须使用**：
+
+```java
+@FxmlObject
+public class StatusLabel extends Label {
+    @Inject private StatusService statusService;
+    
+    public StatusLabel() {
+        // ① 构造函数 - statusService 此时为 null ❌
+    }
+    
+    @PostInject
+    private void afterInject() {
+        // ② 已注入 - statusService 现在可用 ✅
+        setText(statusService.getStatus());
+    }
+}
+```
+
+**规则：** 对于 `@FxmlObject` 节点，如果初始化需要使用 `@Inject` 依赖，必须使用 `@PostInject` 方法。
 
 ---
 
