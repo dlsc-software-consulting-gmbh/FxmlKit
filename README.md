@@ -606,6 +606,7 @@ Complete sample code is in the `fxmlkit-samples` module, organized into three ti
 ```
 tier1/
 ├── hello/          # Simplest Hello World
+├── i18n/           # Internationalization example
 ├── provider/       # FxmlViewProvider usage examples
 └── viewpath/       # Custom FXML path
 ```

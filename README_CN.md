@@ -624,6 +624,7 @@ UserView view = userInjector.getInstance(UserView.class);
 ```
 tier1/
 ├── hello/          # 最简单的 Hello World
+├── i18n/           # 国际化示例
 ├── provider/       # FxmlViewProvider 使用示例
 └── viewpath/       # 自定义 FXML 路径（@FxmlPath）
 ```
