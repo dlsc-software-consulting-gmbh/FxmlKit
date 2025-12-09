@@ -14,64 +14,35 @@ import java.util.concurrent.ConcurrentHashMap;
  * Lightweight dependency injection implementation.
  *
  * <p>This is a simple, reflection-based DI adapter suitable for desktop applications
- * and JPro multi-user scenarios.
+ * and JPro multi-user scenarios. Provides type-based instance binding, constructor
+ * injection with dependency resolution, and field/method injection via @Inject.
+ * Thread-safe via ConcurrentHashMap with idempotent member injection.
  *
- * <h2>Features</h2>
- * <ul>
- *   <li>Type-based instance binding</li>
- *   <li>Constructor injection with dependency resolution</li>
- *   <li>Field and method injection via @Inject</li>
- *   <li>Thread-safe via ConcurrentHashMap</li>
- *   <li>Idempotent member injection</li>
- * </ul>
+ * <p>Follows the DiAdapter two-phase contract: {@code getInstance} performs constructor
+ * injection only, {@code injectMembers} performs field and method injection (idempotent
+ * per object).
  *
- * <h2>Injection Contract</h2>
- * <p>This implementation follows the DiAdapter two-phase contract:
- * <ol>
- *   <li><b>getInstance():</b> Constructor injection only (no field/method injection)</li>
- *   <li><b>injectMembers():</b> Field and method injection, idempotent per object</li>
- * </ol>
+ * <p>Recognizes @Inject from javax.inject, jakarta.inject, and com.google.inject.
  *
- * <h2>Annotation Support</h2>
- * <p>Recognizes @Inject from multiple frameworks:
- * <ul>
- *   <li>javax.inject.Inject</li>
- *   <li>jakarta.inject.Inject</li>
- *   <li>com.google.inject.Inject</li>
- * </ul>
+ * <p>Limitations: no circular dependency support, no scope mechanism (all bindings are
+ * singleton-style), no qualifier support (only type-based binding), method injection
+ * idempotency depends on method design.
  *
- * <h2>Limitations</h2>
- * <ul>
- *   <li>No circular dependency support</li>
- *   <li>No scope mechanism (all bindings are singleton-style)</li>
- *   <li>No qualifier support (only type-based binding)</li>
- *   <li>Method injection idempotency depends on method design</li>
- * </ul>
- *
- * <h2>Usage Examples</h2>
- *
- * <h3>Desktop Mode (Tier 2)</h3>
+ * <p>Desktop mode (Tier 2):
  * <pre>{@code
- * // One-time setup
  * LiteDiAdapter injector = new LiteDiAdapter();
  * injector.bindInstance(UserService.class, new UserService());
- * injector.bindInstance(ConfigService.class, new ConfigService());
  * FxmlKit.setDiAdapter(injector);
  *
- * // Then use normally
  * MainView view = new MainView();
- * Parent root = view;  // Ready to use
  * }</pre>
  *
- * <h3>JPro Multi-User Mode (Tier 3)</h3>
+ * <p>JPro multi-user mode (Tier 3):
  * <pre>{@code
- * // Each user gets their own injector
  * LiteDiAdapter injector = new LiteDiAdapter();
  * injector.bindInstance(User.class, currentUser);
- * injector.bindInstance(UserService.class, new UserService(currentUser));
- * injector.bindInstance(DiAdapter.class, injector);  // Bind self for injection
+ * injector.bindInstance(DiAdapter.class, injector);
  *
- * // User view with constructor injection
  * public class MainView extends FxmlView<MainController> {
  *     @Inject
  *     public MainView(DiAdapter diAdapter) {
@@ -79,17 +50,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *     }
  * }
  *
- * // Create view with user-specific dependencies
  * MainView view = injector.getInstance(MainView.class);
- * Parent root = view;  // Ready to use
  * }</pre>
  *
- * <h2>Thread Safety</h2>
- * <ul>
- *   <li>Instance registry is thread-safe (ConcurrentHashMap)</li>
- *   <li>Injection tracking is thread-safe (identity-based concurrent set)</li>
- *   <li>Static reflection caches are thread-safe</li>
- * </ul>
+ * <p>Thread-safe: instance registry uses ConcurrentHashMap, injection tracking uses
+ * identity-based concurrent set, static reflection caches are thread-safe.
  *
  * @see BaseDiAdapter
  * @see DiAdapter
@@ -141,7 +106,7 @@ public class LiteDiAdapter extends BaseDiAdapter {
      * <p>If a bound instance exists, returns it immediately. Otherwise, creates
      * a new instance using constructor injection.
      *
-     * <p><b>Note:</b> This method only performs constructor injection. Field and
+     * <p>Note: This method only performs constructor injection. Field and
      * method injection must be done via {@link #injectMembers(Object)}.
      *
      * @param <T>  the type parameter
@@ -169,11 +134,8 @@ public class LiteDiAdapter extends BaseDiAdapter {
      * members. It is idempotent - calling it multiple times on the same object
      * has no additional effect.
      *
-     * <p><b>Injection Order:</b>
-     * <ol>
-     *   <li>Field injection (only if field is null)</li>
-     *   <li>Method injection (always called)</li>
-     * </ol>
+     * <p>Injection order: field injection (only if field is null), then method
+     * injection (always called).
      *
      * @param target the object to inject (never null)
      * @throws RuntimeException if injection fails
@@ -228,12 +190,9 @@ public class LiteDiAdapter extends BaseDiAdapter {
     /**
      * Creates a new instance using constructor injection.
      *
-     * <p>This method:
-     * <ol>
-     *   <li>Selects the appropriate constructor (prefers @Inject-annotated)</li>
-     *   <li>Resolves all constructor parameters via {@link #getInstance(Class)}</li>
-     *   <li>Invokes the constructor to create the instance</li>
-     * </ol>
+     * <p>Selects the appropriate constructor (prefers @Inject-annotated), resolves
+     * all constructor parameters via {@link #getInstance(Class)}, then invokes the
+     * constructor to create the instance.
      *
      * @param <T>  the type parameter
      * @param type the class to instantiate
@@ -263,14 +222,10 @@ public class LiteDiAdapter extends BaseDiAdapter {
     /**
      * Clears all internal state of this injector.
      *
-     * <p>This includes:
-     * <ul>
-     *   <li>All manually bound instances</li>
-     *   <li>Injected object tracking set</li>
-     * </ul>
+     * <p>This includes all manually bound instances and injected object tracking set.
      *
-     * <p><b>Note:</b> This does NOT clear static reflection caches in
-     * InjectionUtils, as those are shared globally.
+     * <p>Note: This does NOT clear static reflection caches in InjectionUtils, as
+     * those are shared globally.
      *
      * <p>Typically used for testing or resetting injector state.
      */

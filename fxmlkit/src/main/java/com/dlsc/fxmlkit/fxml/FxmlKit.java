@@ -17,55 +17,35 @@ import java.util.logging.Logger;
 /**
  * Central configuration facade for FxmlKit framework.
  *
- * <p>This class provides global configuration for the three-tier progressive design
- * of FxmlKit, allowing applications to start with zero configuration and progressively
- * enable dependency injection as needed.
+ * <p>Provides global configuration for the three-tier progressive design of FxmlKit,
+ * allowing applications to start with zero configuration and progressively enable
+ * dependency injection as needed.
  *
- * <h2>Hot Reload Support</h2>
- * <p>FxmlKit supports automatic hot reload for FXML and CSS files during development.
+ * <p>Hot reload support: FxmlKit supports automatic hot reload for FXML and CSS files
+ * during development. Enable with {@code enableDevelopmentMode()} or control FXML and
+ * CSS hot reload independently via {@code setFxmlHotReloadEnabled} and
+ * {@code setCssHotReloadEnabled}.
  *
- * <h3>Quick Start (Development Mode)</h3>
+ * <p>Development mode example:
  * <pre>{@code
- * // Enable all development features with one call
  * FxmlKit.enableDevelopmentMode();
- *
- * // Views automatically register for hot reload
  * MainView view = new MainView();
  * }</pre>
  *
- * <h3>Fine-Grained Control</h3>
+ * <p>Hot reload support: .fxml (full reload, loses runtime state), .css/.bss (stylesheet
+ * refresh, preserves state). Not supported: .properties (ResourceBundle caching), images
+ * (JavaFX Image caching).
+ *
+ * <p>Three-tier usage:
+ *
+ * <p>Tier 1 (zero-config):
  * <pre>{@code
- * // Control FXML and CSS hot reload independently
- * FxmlKit.setFxmlHotReloadEnabled(true);
- * FxmlKit.setCssHotReloadEnabled(true);
- *
- * // Or use CSSFX for CSS hot reload
- * FxmlKit.setFxmlHotReloadEnabled(true);
- * FxmlKit.setCssHotReloadEnabled(false);
- * CSSFX.start();
- * }</pre>
- *
- * <h3>What Can Be Hot-Reloaded</h3>
- * <table border="1">
- *   <tr><th>File Type</th><th>Support</th><th>Notes</th></tr>
- *   <tr><td>.fxml</td><td>Yes</td><td>Full reload, loses runtime state</td></tr>
- *   <tr><td>.css, .bss</td><td>Yes</td><td>Stylesheet refresh, preserves state</td></tr>
- *   <tr><td>.properties</td><td>No</td><td>Java ResourceBundle caching limitation</td></tr>
- *   <tr><td>.png, .jpg, etc.</td><td>No</td><td>JavaFX Image caching limitation</td></tr>
- * </table>
- *
- * <h2>Three-Tier Progressive Design</h2>
- *
- * <h3>Tier 1: Zero-Configuration Mode (No DI)</h3>
- * <pre>{@code
- * // No configuration needed
  * MainView view = new MainView();
  * stage.setScene(new Scene(view));
  * }</pre>
  *
- * <h3>Tier 2: Global DI Mode (Single-User Desktop)</h3>
+ * <p>Tier 2 (global DI):
  * <pre>{@code
- * // One-time setup
  * LiteDiAdapter di = new LiteDiAdapter();
  * di.bindInstance(UserService.class, new UserService());
  * FxmlKit.setDiAdapter(di);
@@ -73,7 +53,7 @@ import java.util.logging.Logger;
  * MainView view = new MainView();
  * }</pre>
  *
- * <h3>Tier 3: Isolated DI Mode (JPro Multi-User)</h3>
+ * <p>Tier 3 (isolated DI):
  * <pre>{@code
  * Injector injector = Guice.createInjector(new UserModule(user));
  * MainView view = injector.getInstance(MainView.class);
@@ -125,7 +105,7 @@ public final class FxmlKit {
      * FxmlKit.setCssHotReloadEnabled(true);
      * }</pre>
      *
-     * <p>Call this during application startup in development mode:
+     * <p>Example usage:
      * <pre>{@code
      * public class MyApp extends Application {
      *     @Override
@@ -160,8 +140,6 @@ public final class FxmlKit {
         setFxmlHotReloadEnabled(false);
         setCssHotReloadEnabled(false);
     }
-
-    // ========== FXML Hot Reload ==========
 
     /**
      * Enables or disables FXML hot reload.
@@ -204,7 +182,6 @@ public final class FxmlKit {
      * via same-name convention. Changes do not propagate to parent FXMLs that
      * include the affected view via fx:include.
      *
-     * <h3>Using CSSFX Instead</h3>
      * <p>For advanced CSS scenarios (shared stylesheets, Scene-level styles),
      * disable the built-in CSS hot reload and use CSSFX:
      * <pre>{@code

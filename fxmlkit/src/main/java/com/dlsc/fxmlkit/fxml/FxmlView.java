@@ -16,49 +16,31 @@ import java.util.logging.Logger;
 /**
  * Base class for FXML-backed views that extend JavaFX nodes directly.
  *
- * <p>This class wraps FXML content in a StackPane, allowing views to be used
- * as direct JavaFX nodes while supporting the full three-tier DI model.
+ * <p>This class wraps FXML content in a StackPane, allowing views to be used as
+ * direct JavaFX nodes while supporting the full three-tier DI model. When hot reload
+ * is enabled, views automatically register for file change monitoring.
  *
- * <h2>Hot Reload Support</h2>
- * <p>When hot reload is enabled via {@code FxmlKit.enableDevelopmentMode()}, views
- * automatically register themselves for file change monitoring. Changes to the
- * FXML or CSS files will automatically trigger a view reload or stylesheet refresh.
+ * <p>Three-tier usage:
  *
- * <pre>{@code
- * // Enable hot reload at startup
- * FxmlKit.enableDevelopmentMode();
- *
- * // Or fine-grained control
- * FxmlKit.setFxmlHotReloadEnabled(true);
- * FxmlKit.setCssHotReloadEnabled(true);
- * }</pre>
- *
- * <h2>Three-Tier Support</h2>
- *
- * <h3>Tier 1 - Zero Configuration (No DI)</h3>
+ * <p>Tier 1 (Zero-Config):
  * <pre>{@code
  * public class MainView extends FxmlView<MainController> {}
  *
- * // No setup required
  * MainView view = new MainView();
- * stage.setScene(new Scene(view));  // Ready to use immediately
+ * stage.setScene(new Scene(view));
  * }</pre>
  *
- * <h3>Tier 2 - Global DI (Desktop)</h3>
+ * <p>Tier 2 (Global DI):
  * <pre>{@code
- * // One-time setup at application startup
  * LiteDiAdapter di = new LiteDiAdapter();
  * di.bindInstance(UserService.class, new UserService());
  * FxmlKit.setDiAdapter(di);
  *
- * // Then use normally
  * MainView view = new MainView();
- * stage.setScene(new Scene(view));  // Ready to use immediately
  * }</pre>
  *
- * <h3>Tier 3 - Isolated DI (JPro Multi-User)</h3>
+ * <p>Tier 3 (Isolated DI):
  * <pre>{@code
- * // User-specific view class with constructor injection
  * public class MainView extends FxmlView<MainController> {
  *     @Inject
  *     public MainView(DiAdapter diAdapter) {
@@ -66,26 +48,16 @@ import java.util.logging.Logger;
  *     }
  * }
  *
- * // Create via DI framework
  * Injector injector = Guice.createInjector(new UserModule(user));
  * MainView view = injector.getInstance(MainView.class);
- * stage.setScene(new Scene(view));  // Ready to use immediately
  * }</pre>
  *
- * <h2>Key Differences from FxmlViewProvider</h2>
- * <ul>
- *   <li>FxmlView IS-A JavaFX node (extends StackPane)</li>
- *   <li>FxmlViewProvider HAS-A JavaFX node (returns Parent)</li>
- *   <li>FxmlView can be used directly as a Scene root</li>
- * </ul>
+ * <p>Key difference from FxmlViewProvider: FxmlView IS-A JavaFX node (extends StackPane),
+ * while FxmlViewProvider HAS-A JavaFX node (returns Parent).
  *
- * <h2>Automatic Stylesheet Attachment</h2>
- * <p>Stylesheets are automatically attached for the entire FXML hierarchy:
- * <ul>
- *   <li>Main FXML and all nested {@code <fx:include>} files</li>
- *   <li>Searches for .bss (binary) and .css (text) in same directory as each FXML</li>
- *   <li>Optimized: Skips if stylesheet already declared in FXML</li>
- * </ul>
+ * <p>Stylesheets are automatically attached for the entire FXML hierarchy (main FXML and
+ * all nested fx:include files). Searches for .bss and .css in same directory as each FXML,
+ * skipping if already declared in FXML.
  *
  * @param <C> the controller type
  */
@@ -132,11 +104,8 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     /**
      * Constructs the view using global DiAdapter (Tier 1/2).
      *
-     * <p>This constructor is used for:
-     * <ul>
-     *   <li><b>Tier 1:</b> When no DiAdapter is configured (zero-config mode)</li>
-     *   <li><b>Tier 2:</b> When a global DiAdapter is set via {@code FxmlKit.setDiAdapter()}</li>
-     * </ul>
+     * <p>Used for Tier 1 when no DiAdapter is configured (zero-config mode),
+     * or Tier 2 when a global DiAdapter is set via {@code FxmlKit.setDiAdapter()}.
      *
      * <p>The FXML is loaded immediately during construction.
      */
@@ -147,7 +116,7 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     /**
      * Constructs the view with a resource bundle using global DiAdapter (Tier 1/2).
      *
-     * @param resources the resource bundle for i18n (maybe null)
+     * @param resources the resource bundle for i18n (may be null)
      */
     protected FxmlView(ResourceBundle resources) {
         this(FxmlKit.getDiAdapter(), resources);
@@ -156,20 +125,10 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     /**
      * Constructs the view with a specific DiAdapter (Tier 3).
      *
-     * <p>This constructor is used for Tier 3 (isolated DI) scenarios where
-     * each user session has its own DiAdapter instance.
+     * <p>Used for Tier 3 (isolated DI) scenarios where each user session has its own
+     * DiAdapter instance.
      *
-     * <p>Typical usage with Guice:
-     * <pre>{@code
-     * public class HomeView extends FxmlView<HomeController> {
-     *     @Inject
-     *     public HomeView(DiAdapter diAdapter) {
-     *         super(diAdapter);
-     *     }
-     * }
-     * }</pre>
-     *
-     * @param diAdapter the DiAdapter for dependency injection (maybe null for zero-config)
+     * @param diAdapter the DiAdapter for dependency injection (may be null for zero-config)
      */
     protected FxmlView(DiAdapter diAdapter) {
         this(diAdapter, null);
@@ -178,8 +137,8 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     /**
      * Constructs the view with a specific DiAdapter and resource bundle (Tier 3).
      *
-     * @param diAdapter the DiAdapter for dependency injection (maybe null for zero-config)
-     * @param resources the resource bundle for i18n (maybe null)
+     * @param diAdapter the DiAdapter for dependency injection (may be null for zero-config)
+     * @param resources the resource bundle for i18n (may be null)
      */
     protected FxmlView(DiAdapter diAdapter, ResourceBundle resources) {
         this.diAdapter = diAdapter;
@@ -219,9 +178,6 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
         return loadedRoot;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getFxmlResourcePath() {
         if (cachedResourcePath == null) {
@@ -231,9 +187,6 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
         return cachedResourcePath;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public URL getFxmlUrl() {
         if (cachedFxmlUrl == null) {
@@ -243,11 +196,9 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     }
 
     /**
-     * {@inheritDoc}
+     * Reloads the view, discarding the cached FXML and controller.
      *
-     * <p>Reloads the view, discarding the cached FXML and controller.
-     *
-     * <p><b>Thread Safety:</b> Must be called from JavaFX Application Thread.
+     * <p>Must be called from JavaFX Application Thread.
      */
     @Override
     public void reload() {
