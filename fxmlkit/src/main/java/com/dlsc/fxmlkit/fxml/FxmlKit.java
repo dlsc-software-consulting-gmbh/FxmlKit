@@ -22,20 +22,12 @@ import java.util.logging.Logger;
  * <p>Provides global configuration for the three-tier progressive design of FxmlKit.
  *
  * <p>Hot reload can be enabled via {@code enableDevelopmentMode()} or controlled
- * independently via {@code setFxmlHotReloadEnabled}, {@code setCssHotReloadEnabled},
- * and {@code setGlobalCssMonitoring}.
- *
- * <p>CSS monitoring modes:
- * <ul>
- *   <li>Component-based (default): monitors CSS files matching FXML names</li>
- *   <li>Global: monitors all stylesheets including Scene-level and shared styles</li>
- * </ul>
+ * independently via {@code setFxmlHotReloadEnabled} and {@code setCssHotReloadEnabled}.
  *
  * @see FxmlKitLoader
  * @see FxmlViewProvider
  * @see DiAdapter
  * @see HotReloadManager
- * @see GlobalCssMonitor
  */
 public final class FxmlKit {
 
@@ -75,8 +67,6 @@ public final class FxmlKit {
      * <p>Equivalent to calling {@code setFxmlHotReloadEnabled(true)} and
      * {@code setCssHotReloadEnabled(true)}.
      *
-     * <p>Does not enable global CSS monitoring. See {@link #setGlobalCssMonitoring(boolean)}.
-     *
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
      */
@@ -86,31 +76,14 @@ public final class FxmlKit {
     }
 
     /**
-     * Enables development mode with FXML, CSS, and global CSS monitoring.
-     *
-     * <p>Equivalent to calling {@code setFxmlHotReloadEnabled(true)},
-     * {@code setCssHotReloadEnabled(true)}, and {@code setGlobalCssMonitoring(true)}.
-     *
-     * @see #enableDevelopmentMode()
-     * @see #setGlobalCssMonitoring(boolean)
-     */
-    public static void enableFullDevelopmentMode() {
-        setFxmlHotReloadEnabled(true);
-        setCssHotReloadEnabled(true);
-        setGlobalCssMonitoring(true);
-    }
-
-    /**
      * Disables development mode and releases hot reload resources.
      *
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
-     * @see #setGlobalCssMonitoring(boolean)
      */
     public static void disableDevelopmentMode() {
         setFxmlHotReloadEnabled(false);
         setCssHotReloadEnabled(false);
-        setGlobalCssMonitoring(false);
     }
 
     /**
@@ -120,7 +93,7 @@ public final class FxmlKit {
      * affected views. Full reload loses runtime state (user input, scroll position).
      * Changes propagate through fx:include dependencies.
      *
-     * <p>Uses WatchService for file monitoring with 500ms debouncing. Monitors both
+     * <p>Uses WatchService for file monitoring with 300ms debouncing. Monitors both
      * source and target directories, automatically syncing changes.
      *
      * @param enabled true to enable FXML hot reload, false to disable
@@ -149,13 +122,16 @@ public final class FxmlKit {
      * <p>When enabled, monitors .css and .bss files for changes and refreshes
      * stylesheets without full view reload. Runtime state is preserved.
      *
-     * <p>By default, only monitors stylesheets with the same name as registered
-     * FXML files (e.g., UserView.fxml → UserView.css). Scene-level and shared
-     * stylesheets are monitored when global CSS monitoring is enabled.
+     * <p>Monitors all stylesheets across the scene graph:
+     * <ul>
+     *   <li>Scene-level stylesheets</li>
+     *   <li>All Parent node stylesheets</li>
+     *   <li>Dynamically added stylesheets</li>
+     *   <li>Stylesheets matching FXML names (e.g., UserView.fxml → UserView.css)</li>
+     * </ul>
      *
      * @param enabled true to enable CSS hot reload, false to disable
      * @see #isCssHotReloadEnabled()
-     * @see #setGlobalCssMonitoring(boolean)
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setCssHotReloadEnabled(enabled);
@@ -169,40 +145,6 @@ public final class FxmlKit {
      */
     public static boolean isCssHotReloadEnabled() {
         return HotReloadManager.getInstance().isCssHotReloadEnabled();
-    }
-
-    // ========== Global CSS Monitoring ==========
-
-    /**
-     * Enables or disables global CSS monitoring.
-     *
-     * <p>When enabled, monitors all stylesheets across the scene graph:
-     * <ul>
-     *   <li>Scene-level stylesheets</li>
-     *   <li>All Parent node stylesheets</li>
-     *   <li>Dynamically added stylesheets</li>
-     * </ul>
-     *
-     * <p>When disabled (default), only monitors CSS files matching FXML names.
-     *
-     * <p>Has no effect unless CSS hot reload is also enabled.
-     *
-     * @param enabled true to enable global CSS monitoring
-     * @see #isGlobalCssMonitoring()
-     * @see #setCssHotReloadEnabled(boolean)
-     */
-    public static void setGlobalCssMonitoring(boolean enabled) {
-        HotReloadManager.getInstance().setGlobalCssMonitoring(enabled);
-    }
-
-    /**
-     * Returns whether global CSS monitoring is currently enabled.
-     *
-     * @return true if global CSS monitoring is enabled
-     * @see #setGlobalCssMonitoring(boolean)
-     */
-    public static boolean isGlobalCssMonitoring() {
-        return HotReloadManager.getInstance().isGlobalCssMonitoring();
     }
 
     // ========== Logging Configuration ==========

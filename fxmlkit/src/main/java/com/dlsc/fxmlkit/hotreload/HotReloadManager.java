@@ -33,51 +33,68 @@ import java.util.logging.Logger;
 /**
  * Central manager for FXML and CSS hot reload functionality.
  *
- * <p>This singleton coordinates file monitoring, dependency tracking, and view reloading
- * during development, providing zero-configuration hot reload support for FxmlKit views.
+ * <p>This singleton class coordinates file monitoring, dependency tracking, and view reloading
+ * during development. It provides zero-configuration hot reload support for FxmlKit views.
  *
- * <p>Monitors file changes via WatchService in both source (src/main/resources) and target
- * (target/classes or build/classes) directories. Propagates changes through fx:include
- * dependencies and refreshes CSS/BSS stylesheets. Uses 500ms debouncing to prevent
- * duplicate reloads.
- *
- * <h2>CSS Monitoring Modes</h2>
+ * <h2>Features</h2>
  * <ul>
- *   <li><b>Component-based (default):</b> Only monitors CSS files with same name as FXML
- *       (e.g., UserView.fxml → UserView.css)</li>
- *   <li><b>Global:</b> Monitors all stylesheets across the entire scene graph, including
- *       Scene-level styles, shared stylesheets, and dynamically added styles</li>
+ *   <li>Automatic file change detection via WatchService</li>
+ *   <li>Dual directory monitoring (source and target/classes)</li>
+ *   <li>Dependency propagation for fx:include hierarchies</li>
+ *   <li>CSS/BSS stylesheet change detection and refresh</li>
+ *   <li>Debouncing to prevent duplicate reloads</li>
+ *   <li>Thread-safe component registration</li>
+ *   <li>Support for multi-module Maven/Gradle projects</li>
  * </ul>
  *
- * <p>Supported file types:
- * <ul>
- *   <li>.fxml - Full reload (loses runtime state)
- *   <li>.css, .bss - Stylesheet refresh (preserves runtime state)
- *   <li>.properties - Ignored (Java ResourceBundle caching limitation)
- *   <li>.png, .jpg, etc. - Ignored (JavaFX Image caching limitation)
- * </ul>
+ * <h2>Supported File Types</h2>
+ * <table border="1">
+ *   <tr><th>Extension</th><th>Behavior</th><th>Notes</th></tr>
+ *   <tr><td>.fxml</td><td>Full reload</td><td>Loses runtime state</td></tr>
+ *   <tr><td>.css, .bss</td><td>Stylesheet refresh</td><td>Preserves runtime state</td></tr>
+ *   <tr><td>.properties</td><td>Ignored</td><td>Java ResourceBundle caching limitation</td></tr>
+ *   <tr><td>.png, .jpg, etc.</td><td>Ignored</td><td>JavaFX Image caching limitation</td></tr>
+ * </table>
  *
- * <p>Usage:
+ * <h2>Usage</h2>
  * <pre>{@code
- * // Enable at startup
+ * // Enable hot reload at application startup
  * if (isDevelopmentMode()) {
  *     FxmlKit.enableDevelopmentMode();
- *     // Optionally enable global CSS monitoring
- *     FxmlKit.setGlobalCssMonitoring(true);
  * }
  *
- * // Components auto-register when created
- * MainView view = new MainView();
+ * // Components auto-register when created (if enabled)
+ * MainView view = new MainView();  // Auto-registered
  *
  * // Disable at shutdown
  * FxmlKit.disableDevelopmentMode();
  * }</pre>
  *
- * <p>Thread-safe: all public methods are thread-safe. Internal state is protected by
+ * <h2>Architecture</h2>
+ * <pre>
+ * File Change (src or target)
+ *     |
+ *     v
+ * WatchService Thread
+ *     |
+ *     v
+ * Debounce Check (300ms window)
+ *     |
+ *     v
+ * Dependency Analysis (BFS for fx:include / CSS mapping)
+ *     |
+ *     v
+ * Platform.runLater()
+ *     |
+ *     v
+ * Component.reload() on JavaFX Thread
+ * </pre>
+ *
+ * <h2>Thread Safety</h2>
+ * <p>All public methods are thread-safe. Internal state is protected by
  * ConcurrentHashMap and synchronized blocks where necessary.
  *
  * @see HotReloadable
- * @see GlobalCssMonitor
  */
 public final class HotReloadManager {
 
@@ -91,7 +108,7 @@ public final class HotReloadManager {
     /**
      * Debounce window in milliseconds.
      */
-    private static final long DEBOUNCE_MILLIS = 500;
+    private static final long DEBOUNCE_MILLIS = 300;
 
     /**
      * Whether FXML hot reload is enabled.
@@ -102,13 +119,6 @@ public final class HotReloadManager {
      * Whether CSS hot reload is enabled.
      */
     private volatile boolean cssHotReloadEnabled = false;
-
-    /**
-     * Whether global CSS monitoring is enabled.
-     * When true, monitors all stylesheets across the scene graph.
-     * When false, only monitors same-name CSS files (e.g., View.fxml → View.css).
-     */
-    private volatile boolean globalCssMonitoring = false;
 
     /**
      * Whether the WatchService has been initialized.
@@ -161,14 +171,14 @@ public final class HotReloadManager {
     private final Map<String, Long> lastReloadTime = new ConcurrentHashMap<>();
 
     /**
-     * Global CSS monitor instance for scene-graph-wide stylesheet monitoring.
-     */
-    private final GlobalCssMonitor globalCssMonitor = new GlobalCssMonitor();
-
-    /**
-     * Cached project root for source file resolution.
+     * Cached project root for global CSS monitoring.
      */
     private volatile Path cachedProjectRoot;
+
+    /**
+     * Global CSS monitor for Scene-level stylesheets.
+     */
+    private final GlobalCssMonitor globalCssMonitor = new GlobalCssMonitor();
 
     private HotReloadManager() {
     }
@@ -183,11 +193,25 @@ public final class HotReloadManager {
     }
 
     /**
+     * Returns the GlobalCssMonitor instance.
+     *
+     * @return the global CSS monitor
+     */
+    public GlobalCssMonitor getGlobalCssMonitor() {
+        return globalCssMonitor;
+    }
+
+    // ========== FXML Hot Reload Control ==========
+
+    /**
      * Enables or disables FXML hot reload.
      *
-     * <p>When enabled, the manager starts monitoring directories when components register,
-     * automatically reloads views when FXML files change, and propagates changes through
-     * fx:include dependencies.
+     * <p>When enabled, the manager will:
+     * <ul>
+     *   <li>Start monitoring directories when components register</li>
+     *   <li>Automatically reload views when FXML files change</li>
+     *   <li>Propagate changes through fx:include dependencies</li>
+     * </ul>
      *
      * @param enabled true to enable FXML hot reload, false to disable
      */
@@ -211,12 +235,17 @@ public final class HotReloadManager {
         return fxmlHotReloadEnabled;
     }
 
+    // ========== CSS Hot Reload Control ==========
+
     /**
      * Enables or disables CSS hot reload.
      *
-     * <p>When enabled, the manager monitors CSS/BSS files for changes and refreshes
-     * stylesheets without full view reload, preserving runtime state (user input,
-     * scroll position, etc.).
+     * <p>When enabled, the manager will:
+     * <ul>
+     *   <li>Monitor CSS/BSS files for changes</li>
+     *   <li>Refresh stylesheets without full view reload</li>
+     *   <li>Preserve runtime state (user input, scroll position, etc.)</li>
+     * </ul>
      *
      * <p>Disable this if using CSSFX for CSS hot reload.
      *
@@ -243,41 +272,7 @@ public final class HotReloadManager {
         return cssHotReloadEnabled;
     }
 
-    /**
-     * Enables or disables global CSS monitoring.
-     *
-     * <p>When enabled, monitors all stylesheets across the scene graph:
-     * <ul>
-     *   <li>Scene-level stylesheets</li>
-     *   <li>All Parent node stylesheets</li>
-     *   <li>Dynamically added stylesheets</li>
-     *   <li>Shared stylesheets used by multiple nodes</li>
-     * </ul>
-     *
-     * <p>When disabled (default), only monitors CSS files with the same name as
-     * registered FXML files (e.g., UserView.fxml → UserView.css).
-     *
-     * @param enabled true to enable global CSS monitoring, false for component-based only
-     */
-    public synchronized void setGlobalCssMonitoring(boolean enabled) {
-        if (this.globalCssMonitoring == enabled) {
-            return;
-        }
-
-        this.globalCssMonitoring = enabled;
-        logger.log(Level.FINE, "Global CSS monitoring {0}", enabled ? "enabled" : "disabled");
-
-        updateGlobalCssMonitorState();
-    }
-
-    /**
-     * Returns whether global CSS monitoring is enabled.
-     *
-     * @return true if global CSS monitoring is enabled
-     */
-    public boolean isGlobalCssMonitoring() {
-        return globalCssMonitoring;
-    }
+    // ========== Convenience Methods ==========
 
     /**
      * Returns whether any hot reload feature is enabled.
@@ -312,12 +307,14 @@ public final class HotReloadManager {
         setCssHotReloadEnabled(false);
     }
 
+    // ========== Component Registration ==========
+
     /**
      * Registers a component for hot reload monitoring.
      *
      * <p>When registered, the component's FXML file location is analyzed to determine
-     * which directories to monitor. The component will receive reload events when its
-     * FXML or any of its fx:include dependencies change.
+     * which directories to monitor. The component will receive reload events when
+     * its FXML or any of its fx:include dependencies change.
      *
      * @param component the component to register
      */
@@ -350,6 +347,8 @@ public final class HotReloadManager {
         initializeMonitoringFromComponent(component);
     }
 
+    // ========== Internal: WatchService Management ==========
+
     /**
      * Updates the WatchService state based on current configuration.
      */
@@ -363,11 +362,10 @@ public final class HotReloadManager {
     }
 
     /**
-     * Updates the global CSS monitor state based on current configuration.
+     * Updates the GlobalCssMonitor state based on current configuration.
      */
     private void updateGlobalCssMonitorState() {
-        if (cssHotReloadEnabled && globalCssMonitoring) {
-            // Set project root if available
+        if (cssHotReloadEnabled) {
             if (cachedProjectRoot != null) {
                 globalCssMonitor.setProjectRoot(cachedProjectRoot);
             }
@@ -386,9 +384,6 @@ public final class HotReloadManager {
             watchThread.interrupt();
             try {
                 watchThread.join(1000);
-                if (watchThread.isAlive()) {
-                    logger.log(Level.WARNING, "Watch thread did not terminate within timeout");
-                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -427,15 +422,6 @@ public final class HotReloadManager {
 
             if (targetDir != null && !monitoredRoots.contains(targetDir)) {
                 initializeMonitoring(targetDir);
-
-                // Cache project root for global CSS monitor
-                if (cachedProjectRoot == null) {
-                    cachedProjectRoot = StylesheetUriConverter.inferProjectRoot(targetDir);
-                    if (cachedProjectRoot != null && globalCssMonitor.isMonitoring()) {
-                        globalCssMonitor.setProjectRoot(cachedProjectRoot);
-                        logger.log(Level.FINE, "Set project root: {0}", cachedProjectRoot);
-                    }
-                }
             }
         } catch (Exception e) {
             logger.log(Level.FINE, "Failed to initialize monitoring from component: {0}",
@@ -476,24 +462,6 @@ public final class HotReloadManager {
             return Path.of(pathStr.substring(0, idx + "/build/resources/main".length()));
         }
 
-        // IntelliJ: find out/production/resources
-        idx = pathStr.indexOf("/out/production/resources/");
-        if (idx < 0) {
-            idx = pathStr.indexOf("\\out\\production\\resources\\");
-        }
-        if (idx >= 0) {
-            return Path.of(pathStr.substring(0, idx + "/out/production/resources".length()));
-        }
-
-        // IntelliJ: find out/production/classes
-        idx = pathStr.indexOf("/out/production/classes/");
-        if (idx < 0) {
-            idx = pathStr.indexOf("\\out\\production\\classes\\");
-        }
-        if (idx >= 0) {
-            return Path.of(pathStr.substring(0, idx + "/out/production/classes".length()));
-        }
-
         return null;
     }
 
@@ -523,6 +491,22 @@ public final class HotReloadManager {
 
             watchServiceInitialized = true;
 
+            // Cache project root for global CSS monitor
+            if (cachedProjectRoot == null) {
+                cachedProjectRoot = StylesheetUriConverter.inferProjectRoot(targetDir);
+                if (cachedProjectRoot != null) {
+                    logger.log(Level.FINE, "Cached project root: {0}", cachedProjectRoot);
+                    // Update GlobalCssMonitor if CSS hot reload is enabled
+                    if (cssHotReloadEnabled) {
+                        globalCssMonitor.setProjectRoot(cachedProjectRoot);
+                        // Ensure monitoring is started (may not have started earlier if project root was null)
+                        if (!globalCssMonitor.isMonitoring()) {
+                            globalCssMonitor.startMonitoring();
+                        }
+                    }
+                }
+            }
+
         } catch (IOException e) {
             logger.log(Level.WARNING, "Failed to initialize monitoring: {0}", e.getMessage());
         }
@@ -549,18 +533,6 @@ public final class HotReloadManager {
         // Gradle: build/resources/main -> src/main/resources
         if (path.contains("/build/resources/main") || path.contains("\\build\\resources\\main")) {
             String projectPath = path.replaceAll("[/\\\\]build[/\\\\]resources[/\\\\]main.*", "");
-            return Path.of(projectPath, "src", "main", "resources");
-        }
-
-        // IntelliJ: out/production/resources -> src/main/resources
-        if (path.contains("/out/production/resources") || path.contains("\\out\\production\\resources")) {
-            String projectPath = path.replaceAll("[/\\\\]out[/\\\\]production[/\\\\]resources.*", "");
-            return Path.of(projectPath, "src", "main", "resources");
-        }
-
-        // IntelliJ: out/production/classes -> src/main/resources
-        if (path.contains("/out/production/classes") || path.contains("\\out\\production\\classes")) {
-            String projectPath = path.replaceAll("[/\\\\]out[/\\\\]production[/\\\\]classes.*", "");
             return Path.of(projectPath, "src", "main", "resources");
         }
 
@@ -654,6 +626,8 @@ public final class HotReloadManager {
         logger.log(Level.FINE, "Watch thread stopped");
     }
 
+    // ========== File Change Processing ==========
+
     /**
      * Processes a file change event.
      */
@@ -673,8 +647,7 @@ public final class HotReloadManager {
             return;
         }
         if (!isFxml && !isCss) {
-             // Not a supported file type
-            return;
+            return;  // Not a supported file type
         }
 
         // Determine if this is a source or target change
@@ -726,21 +699,16 @@ public final class HotReloadManager {
      * Processes a CSS/BSS file change.
      */
     private void processCssChange(String resourcePath) {
-        // Global CSS monitoring
-        if (globalCssMonitoring && globalCssMonitor.isMonitoring()) {
-            globalCssMonitor.refreshStylesheet(resourcePath);
-        }
+        // Global CSS monitoring (Scene-level stylesheets)
+        globalCssMonitor.refreshStylesheet(resourcePath);
 
-        // Component-based CSS monitoring (original behavior)
+        // Component-based CSS monitoring (same-name stylesheets)
         Set<String> affectedFxmlPaths = findFxmlsUsingStylesheet(resourcePath);
-
-        if (affectedFxmlPaths.isEmpty() && !globalCssMonitoring) {
-            logger.log(Level.FINE, "No registered components affected by: {0}", resourcePath);
-            return;
-        }
 
         if (!affectedFxmlPaths.isEmpty()) {
             reloadComponentsStylesheet(affectedFxmlPaths, resourcePath);
+        } else {
+            logger.log(Level.FINE, "No registered components affected by: {0}", resourcePath);
         }
     }
 
@@ -772,9 +740,6 @@ public final class HotReloadManager {
 
     /**
      * Performs stylesheet refresh for affected components.
-     *
-     * @param affectedPaths the affected FXML paths
-     * @param cssResourcePath the CSS resource path that changed
      */
     private void reloadComponentsStylesheet(Set<String> affectedPaths, String cssResourcePath) {
         Set<HotReloadable> componentsToReload = collectComponents(affectedPaths);
@@ -783,9 +748,7 @@ public final class HotReloadManager {
             return;
         }
 
-        logger.log(Level.INFO, "Stylesheet refresh: {0} component(s)", componentsToReload.size());
-
-        // Find source file for the CSS
+        // Find source file URI for bypassing cache
         String sourceFileUri = null;
         if (cachedProjectRoot != null) {
             Path sourceFile = StylesheetUriConverter.findSourceFile(cssResourcePath, cachedProjectRoot);
@@ -793,15 +756,16 @@ public final class HotReloadManager {
                 sourceFileUri = sourceFile.toUri().toString();
             }
         }
+        final String finalSourceUri = sourceFileUri;
 
-        final String finalSourceFileUri = sourceFileUri;
+        logger.log(Level.INFO, "Stylesheet refresh: {0} component(s)", componentsToReload.size());
 
         Platform.runLater(() -> {
             for (HotReloadable component : componentsToReload) {
                 try {
                     Parent root = component.getRootForStyleRefresh();
                     if (root != null) {
-                        refreshStylesheets(root, cssResourcePath, finalSourceFileUri);
+                        refreshStylesheets(root, cssResourcePath, finalSourceUri);
                         logger.log(Level.FINE, "Stylesheet refreshed: {0}",
                                 component.getClass().getSimpleName());
                     } else {
@@ -821,38 +785,19 @@ public final class HotReloadManager {
 
     /**
      * Refreshes stylesheets for a Parent node and all its children.
-     *
-     * <p>Converts classpath URIs to file:// URIs pointing to source files,
-     * bypassing JavaFX stylesheet cache.
-     *
-     * @param root the root node to refresh
-     * @param cssResourcePath the CSS resource path that changed
-     * @param sourceFileUri the source file URI (may be null)
      */
     private void refreshStylesheets(Parent root, String cssResourcePath, String sourceFileUri) {
         var stylesheets = root.getStylesheets();
-
         for (int i = 0; i < stylesheets.size(); i++) {
             String uri = stylesheets.get(i);
-
             if (StylesheetUriConverter.matchesResourcePath(uri, cssResourcePath)) {
                 if (sourceFileUri != null) {
-                    // Replace with file:// URI pointing to source file
                     // Replace with file:// URI to bypass cache
-                    if (!sourceFileUri.equals(uri)) {
-                        stylesheets.set(i, sourceFileUri);
-                        logger.log(Level.FINE, "Replaced stylesheet: {0} -> {1}",
-                                new Object[]{uri, sourceFileUri});
-                    } else {
-                        // Already using file:// URI, do in-place refresh
-                        stylesheets.remove(i);
-                        stylesheets.add(i, uri);
-                    }
+                    stylesheets.set(i, sourceFileUri);
                 } else {
-                    // Fallback: in-place refresh (may not always work due to caching)
-                    String cleanUri = StylesheetUriConverter.removeQueryString(uri);
+                    // Fallback: remove and re-add
                     stylesheets.remove(i);
-                    stylesheets.add(i, cleanUri);
+                    stylesheets.add(i, uri);
                 }
             }
         }
@@ -993,6 +938,8 @@ public final class HotReloadManager {
         return result;
     }
 
+    // ========== Utility Methods ==========
+
     /**
      * Converts a URI to a classpath-relative resource path.
      */
@@ -1024,18 +971,6 @@ public final class HotReloadManager {
         int resourcesIndex = path.indexOf("/build/resources/main/");
         if (resourcesIndex >= 0) {
             return path.substring(resourcesIndex + "/build/resources/main/".length());
-        }
-
-        // Remove /out/production/resources/ prefix (IntelliJ)
-        int intellijResourcesIndex = path.indexOf("/out/production/resources/");
-        if (intellijResourcesIndex >= 0) {
-            return path.substring(intellijResourcesIndex + "/out/production/resources/".length());
-        }
-
-        // Remove /out/production/classes/ prefix (IntelliJ)
-        int intellijClassesIndex = path.indexOf("/out/production/classes/");
-        if (intellijClassesIndex >= 0) {
-            return path.substring(intellijClassesIndex + "/out/production/classes/".length());
         }
 
         // Remove leading slash
@@ -1170,27 +1105,17 @@ public final class HotReloadManager {
     }
 
     /**
-     * Returns the GlobalCssMonitor instance.
-     *
-     * @return the global CSS monitor
-     */
-    public GlobalCssMonitor getGlobalCssMonitor() {
-        return globalCssMonitor;
-    }
-
-    /**
      * Clears all internal state. Primarily for testing.
      */
     public synchronized void reset() {
         fxmlHotReloadEnabled = false;
         cssHotReloadEnabled = false;
-        globalCssMonitoring = false;
         stopWatchService();
-        globalCssMonitor.reset();
+        globalCssMonitor.stopMonitoring();
+        cachedProjectRoot = null;
         componentsByPath.clear();
         dependencyGraph.clear();
         stylesheetToFxml.clear();
         lastReloadTime.clear();
-        cachedProjectRoot = null;
     }
 }

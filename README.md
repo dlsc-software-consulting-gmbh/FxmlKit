@@ -119,8 +119,8 @@ FXML usage:
 
 ## Acknowledgments
 
-FxmlKit's convention-over-configuration approach (auto-resolving FXML/CSS by class name) was influenced by [afterburner.fx](https://github.com/AdamBien/afterburner.fx). We've extended this foundation with FXML node injection, multi-layer nesting support, and JPro multi-user isolation.
-
+- **[afterburner.fx](https://github.com/AdamBien/afterburner.fx)** — Inspired our convention-over-configuration approach (auto-resolving FXML/CSS by class name). We extended this with FXML node injection, multi-layer nesting, and JPro multi-user isolation.
+- **[CSSFX](https://github.com/McFoggy/cssfx)** — Inspired our CSS hot reload approach (file:// URI replacement). Our implementation features shared WatchService, debounced refresh, and WeakReference-based cleanup.
 ---
 
 ## Quick Start

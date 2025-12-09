@@ -127,8 +127,8 @@ public class StatusCard extends VBox {
 
 ## 致谢（Acknowledgments）
 
-FxmlKit 的约定优于配置理念（通过类名自动解析 FXML/CSS）受到 [afterburner.fx](https://github.com/AdamBien/afterburner.fx) 的启发。我们在此基础上扩展了 FXML 节点注入、多层嵌套支持和 JPro 多用户隔离等功能。
-
+- **[afterburner.fx](https://github.com/AdamBien/afterburner.fx)** — 启发了我们的约定优于配置理念（按类名自动解析 FXML/CSS）。我们在此基础上扩展了 FXML 节点注入、多层嵌套支持和 JPro 多用户隔离。
+- **[CSSFX](https://github.com/McFoggy/cssfx)** — 启发了我们的 CSS 热重载方案（file:// URI 替换）。我们的实现采用了共享 WatchService、防抖刷新和基于 WeakReference 的惰性清理。
 ---
 
 ## 快速开始
