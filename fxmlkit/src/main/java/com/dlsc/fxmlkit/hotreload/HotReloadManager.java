@@ -34,65 +34,37 @@ import java.util.logging.Logger;
 /**
  * Central manager for FXML and CSS hot reload functionality.
  *
- * <p>This singleton class coordinates file monitoring, dependency tracking, and view reloading
- * during development. It provides zero-configuration hot reload support for FxmlKit views.
+ * <p>This singleton coordinates file monitoring, dependency tracking, and view reloading
+ * during development, providing zero-configuration hot reload support for FxmlKit views.
  *
- * <h2>Features</h2>
+ * <p>Monitors file changes via WatchService in both source (src/main/resources) and target
+ * (target/classes or build/classes) directories. Propagates changes through fx:include
+ * dependencies and refreshes CSS/BSS stylesheets. Uses 500ms debouncing to prevent
+ * duplicate reloads.
+ *
+ * <p>Supported file types:
  * <ul>
- *   <li>Automatic file change detection via WatchService</li>
- *   <li>Dual directory monitoring (source and target/classes)</li>
- *   <li>Dependency propagation for fx:include hierarchies</li>
- *   <li>CSS/BSS stylesheet change detection and refresh</li>
- *   <li>Debouncing to prevent duplicate reloads</li>
- *   <li>Thread-safe component registration</li>
- *   <li>Support for multi-module Maven/Gradle projects</li>
+ *   <li>.fxml - Full reload (loses runtime state)
+ *   <li>.css, .bss - Stylesheet refresh (preserves runtime state)
+ *   <li>.properties - Ignored (Java ResourceBundle caching limitation)
+ *   <li>.png, .jpg, etc. - Ignored (JavaFX Image caching limitation)
  * </ul>
  *
- * <h2>Supported File Types</h2>
- * <table border="1">
- *   <tr><th>Extension</th><th>Behavior</th><th>Notes</th></tr>
- *   <tr><td>.fxml</td><td>Full reload</td><td>Loses runtime state</td></tr>
- *   <tr><td>.css, .bss</td><td>Stylesheet refresh</td><td>Preserves runtime state</td></tr>
- *   <tr><td>.properties</td><td>Ignored</td><td>Java ResourceBundle caching limitation</td></tr>
- *   <tr><td>.png, .jpg, etc.</td><td>Ignored</td><td>JavaFX Image caching limitation</td></tr>
- * </table>
- *
- * <h2>Usage</h2>
+ * <p>Usage:
  * <pre>{@code
- * // Enable hot reload at application startup
+ * // Enable at startup
  * if (isDevelopmentMode()) {
  *     FxmlKit.enableDevelopmentMode();
  * }
  *
- * // Components auto-register when created (if enabled)
- * MainView view = new MainView();  // Auto-registered
+ * // Components auto-register when created
+ * MainView view = new MainView();
  *
  * // Disable at shutdown
  * FxmlKit.disableDevelopmentMode();
  * }</pre>
  *
- * <h2>Architecture</h2>
- * <pre>
- * File Change (src or target)
- *     |
- *     v
- * WatchService Thread
- *     |
- *     v
- * Debounce Check (500ms window)
- *     |
- *     v
- * Dependency Analysis (BFS for fx:include / CSS mapping)
- *     |
- *     v
- * Platform.runLater()
- *     |
- *     v
- * Component.reload() on JavaFX Thread
- * </pre>
- *
- * <h2>Thread Safety</h2>
- * <p>All public methods are thread-safe. Internal state is protected by
+ * <p>Thread-safe: all public methods are thread-safe. Internal state is protected by
  * ConcurrentHashMap and synchronized blocks where necessary.
  *
  * @see HotReloadable
@@ -183,17 +155,12 @@ public final class HotReloadManager {
         return INSTANCE;
     }
 
-    // ========== FXML Hot Reload Control ==========
-
     /**
      * Enables or disables FXML hot reload.
      *
-     * <p>When enabled, the manager will:
-     * <ul>
-     *   <li>Start monitoring directories when components register</li>
-     *   <li>Automatically reload views when FXML files change</li>
-     *   <li>Propagate changes through fx:include dependencies</li>
-     * </ul>
+     * <p>When enabled, the manager starts monitoring directories when components register,
+     * automatically reloads views when FXML files change, and propagates changes through
+     * fx:include dependencies.
      *
      * @param enabled true to enable FXML hot reload, false to disable
      */
@@ -217,17 +184,12 @@ public final class HotReloadManager {
         return fxmlHotReloadEnabled;
     }
 
-    // ========== CSS Hot Reload Control ==========
-
     /**
      * Enables or disables CSS hot reload.
      *
-     * <p>When enabled, the manager will:
-     * <ul>
-     *   <li>Monitor CSS/BSS files for changes</li>
-     *   <li>Refresh stylesheets without full view reload</li>
-     *   <li>Preserve runtime state (user input, scroll position, etc.)</li>
-     * </ul>
+     * <p>When enabled, the manager monitors CSS/BSS files for changes and refreshes
+     * stylesheets without full view reload, preserving runtime state (user input,
+     * scroll position, etc.).
      *
      * <p>Disable this if using CSSFX for CSS hot reload.
      *
@@ -252,8 +214,6 @@ public final class HotReloadManager {
     public boolean isCssHotReloadEnabled() {
         return cssHotReloadEnabled;
     }
-
-    // ========== Convenience Methods ==========
 
     /**
      * Returns whether any hot reload feature is enabled.
@@ -288,14 +248,12 @@ public final class HotReloadManager {
         setCssHotReloadEnabled(false);
     }
 
-    // ========== Component Registration ==========
-
     /**
      * Registers a component for hot reload monitoring.
      *
      * <p>When registered, the component's FXML file location is analyzed to determine
-     * which directories to monitor. The component will receive reload events when
-     * its FXML or any of its fx:include dependencies change.
+     * which directories to monitor. The component will receive reload events when its
+     * FXML or any of its fx:include dependencies change.
      *
      * @param component the component to register
      */
@@ -327,8 +285,6 @@ public final class HotReloadManager {
         // Initialize monitoring if needed
         initializeMonitoringFromComponent(component);
     }
-
-    // ========== Internal: WatchService Management ==========
 
     /**
      * Updates the WatchService state based on current configuration.
@@ -577,8 +533,6 @@ public final class HotReloadManager {
         logger.log(Level.FINE, "Watch thread stopped");
     }
 
-    // ========== File Change Processing ==========
-
     /**
      * Processes a file change event.
      */
@@ -598,7 +552,8 @@ public final class HotReloadManager {
             return;
         }
         if (!isFxml && !isCss) {
-            return;  // Not a supported file type
+             // Not a supported file type
+            return;
         }
 
         // Determine if this is a source or target change
@@ -752,8 +707,6 @@ public final class HotReloadManager {
         return components;
     }
 
-    // ========== Dependency Analysis ==========
-
     /**
      * Builds the dependency graph for a component's FXML.
      */
@@ -867,8 +820,6 @@ public final class HotReloadManager {
 
         return result;
     }
-
-    // ========== Utility Methods ==========
 
     /**
      * Converts a URI to a classpath-relative resource path.
