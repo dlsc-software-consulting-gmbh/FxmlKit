@@ -20,9 +20,18 @@ import java.util.logging.Logger;
  * as direct JavaFX nodes while supporting the full three-tier DI model.
  *
  * <h2>Hot Reload Support</h2>
- * <p>When hot reload is enabled via {@code FxmlKit.enableHotReload()}, views
+ * <p>When hot reload is enabled via {@code FxmlKit.enableDevelopmentMode()}, views
  * automatically register themselves for file change monitoring. Changes to the
- * FXML file will automatically trigger a view reload.
+ * FXML or CSS files will automatically trigger a view reload or stylesheet refresh.
+ *
+ * <pre>{@code
+ * // Enable hot reload at startup
+ * FxmlKit.enableDevelopmentMode();
+ *
+ * // Or fine-grained control
+ * FxmlKit.setFxmlHotReloadEnabled(true);
+ * FxmlKit.setCssHotReloadEnabled(true);
+ * }</pre>
  *
  * <h2>Three-Tier Support</h2>
  *

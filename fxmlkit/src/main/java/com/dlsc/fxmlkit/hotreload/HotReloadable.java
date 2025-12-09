@@ -8,7 +8,7 @@ import java.net.URL;
  * Interface for components that support hot reload functionality.
  *
  * <p>Components implementing this interface can be automatically reloaded
- * when their associated FXML files change during development.
+ * when their associated FXML or CSS files change during development.
  *
  * <p>This interface is implemented by {@code FxmlView} and {@code FxmlViewProvider}
  * to enable seamless hot reload integration.
@@ -64,8 +64,8 @@ public interface HotReloadable {
     /**
      * Returns the root Parent node for stylesheet refresh operations.
      *
-     * <p>This method is used by {@link ReloadStrategy#STYLESHEET_RELOAD} to obtain
-     * the root node for refreshing stylesheets without a full reload.
+     * <p>This method is used by the CSS hot reload feature to refresh stylesheets
+     * without a full view reload, preserving runtime state.
      *
      * <p>Default implementation returns {@code this} if the component is a Parent,
      * otherwise returns null (which triggers a fallback to full reload).

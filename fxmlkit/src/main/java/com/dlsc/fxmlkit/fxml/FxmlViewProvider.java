@@ -19,9 +19,18 @@ import java.util.logging.Logger;
  * as opposed to FxmlView which IS-A JavaFX node.
  *
  * <h2>Hot Reload Support</h2>
- * <p>When hot reload is enabled via {@code FxmlKit.enableHotReload()}, providers
+ * <p>When hot reload is enabled via {@code FxmlKit.enableDevelopmentMode()}, providers
  * automatically register themselves for file change monitoring. Changes to the
- * FXML file will automatically trigger a view reload.
+ * FXML or CSS files will automatically trigger a view reload or stylesheet refresh.
+ *
+ * <pre>{@code
+ * // Enable hot reload at startup
+ * FxmlKit.enableDevelopmentMode();
+ *
+ * // Or fine-grained control
+ * FxmlKit.setFxmlHotReloadEnabled(true);
+ * FxmlKit.setCssHotReloadEnabled(true);
+ * }</pre>
  *
  * <h2>Three-Tier Model</h2>
  *

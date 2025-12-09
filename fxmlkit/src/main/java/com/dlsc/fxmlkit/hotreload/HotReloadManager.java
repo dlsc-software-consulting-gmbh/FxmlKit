@@ -2,6 +2,7 @@ package com.dlsc.fxmlkit.hotreload;
 
 import com.dlsc.fxmlkit.fxml.FxmlDependencyAnalyzer;
 import javafx.application.Platform;
+import javafx.scene.Parent;
 
 import java.io.IOException;
 import java.net.URI;
@@ -17,6 +18,7 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -30,7 +32,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Central manager for FXML hot reload functionality.
+ * Central manager for FXML and CSS hot reload functionality.
  *
  * <p>This singleton class coordinates file monitoring, dependency tracking, and view reloading
  * during development. It provides zero-configuration hot reload support for FxmlKit views.
@@ -46,18 +48,27 @@ import java.util.logging.Logger;
  *   <li>Support for multi-module Maven/Gradle projects</li>
  * </ul>
  *
+ * <h2>Supported File Types</h2>
+ * <table border="1">
+ *   <tr><th>Extension</th><th>Behavior</th><th>Notes</th></tr>
+ *   <tr><td>.fxml</td><td>Full reload</td><td>Loses runtime state</td></tr>
+ *   <tr><td>.css, .bss</td><td>Stylesheet refresh</td><td>Preserves runtime state</td></tr>
+ *   <tr><td>.properties</td><td>Ignored</td><td>Java ResourceBundle caching limitation</td></tr>
+ *   <tr><td>.png, .jpg, etc.</td><td>Ignored</td><td>JavaFX Image caching limitation</td></tr>
+ * </table>
+ *
  * <h2>Usage</h2>
  * <pre>{@code
  * // Enable hot reload at application startup
  * if (isDevelopmentMode()) {
- *     HotReloadManager.getInstance().enable();
+ *     FxmlKit.enableDevelopmentMode();
  * }
  *
  * // Components auto-register when created (if enabled)
  * MainView view = new MainView();  // Auto-registered
  *
  * // Disable at shutdown
- * HotReloadManager.getInstance().disable();
+ * FxmlKit.disableDevelopmentMode();
  * }</pre>
  *
  * <h2>Architecture</h2>
@@ -85,7 +96,6 @@ import java.util.logging.Logger;
  * ConcurrentHashMap and synchronized blocks where necessary.
  *
  * @see HotReloadable
- * @see ReloadStrategy
  */
 public final class HotReloadManager {
 
@@ -102,14 +112,19 @@ public final class HotReloadManager {
     private static final long DEBOUNCE_MILLIS = 500;
 
     /**
-     * Whether hot reload is currently enabled.
+     * Whether FXML hot reload is enabled.
      */
-    private volatile boolean enabled = false;
+    private volatile boolean fxmlHotReloadEnabled = false;
 
     /**
-     * Whether the manager has been initialized.
+     * Whether CSS hot reload is enabled.
      */
-    private volatile boolean initialized = false;
+    private volatile boolean cssHotReloadEnabled = false;
+
+    /**
+     * Whether the WatchService has been initialized.
+     */
+    private volatile boolean watchServiceInitialized = false;
 
     /**
      * The WatchService for file system monitoring.
@@ -168,78 +183,112 @@ public final class HotReloadManager {
         return INSTANCE;
     }
 
+    // ========== FXML Hot Reload Control ==========
+
     /**
-     * Enables hot reload functionality.
+     * Enables or disables FXML hot reload.
      *
      * <p>When enabled, the manager will:
      * <ul>
      *   <li>Start monitoring directories when components register</li>
      *   <li>Automatically reload views when FXML files change</li>
-     *   <li>Refresh stylesheets when CSS/BSS files change</li>
      *   <li>Propagate changes through fx:include dependencies</li>
      * </ul>
      *
-     * <p>Call this during application startup in development mode.
+     * @param enabled true to enable FXML hot reload, false to disable
      */
-    public synchronized void enable() {
-        if (enabled) {
-            logger.log(Level.FINE, "Hot reload already enabled");
+    public synchronized void setFxmlHotReloadEnabled(boolean enabled) {
+        if (this.fxmlHotReloadEnabled == enabled) {
             return;
         }
 
-        enabled = true;
-        logger.log(Level.INFO, "Hot reload enabled");
+        this.fxmlHotReloadEnabled = enabled;
+        logger.log(Level.INFO, "FXML hot reload {0}", enabled ? "enabled" : "disabled");
+
+        updateWatchServiceState();
     }
 
     /**
-     * Disables hot reload and releases resources.
+     * Returns whether FXML hot reload is enabled.
      *
-     * <p>Stops the file watching thread and closes the WatchService.
-     * Registered components remain in memory but won't receive reload events.
+     * @return true if FXML hot reload is enabled
      */
-    public synchronized void disable() {
-        if (!enabled) {
+    public boolean isFxmlHotReloadEnabled() {
+        return fxmlHotReloadEnabled;
+    }
+
+    // ========== CSS Hot Reload Control ==========
+
+    /**
+     * Enables or disables CSS hot reload.
+     *
+     * <p>When enabled, the manager will:
+     * <ul>
+     *   <li>Monitor CSS/BSS files for changes</li>
+     *   <li>Refresh stylesheets without full view reload</li>
+     *   <li>Preserve runtime state (user input, scroll position, etc.)</li>
+     * </ul>
+     *
+     * <p>Disable this if using CSSFX for CSS hot reload.
+     *
+     * @param enabled true to enable CSS hot reload, false to disable
+     */
+    public synchronized void setCssHotReloadEnabled(boolean enabled) {
+        if (this.cssHotReloadEnabled == enabled) {
             return;
         }
 
-        enabled = false;
+        this.cssHotReloadEnabled = enabled;
+        logger.log(Level.INFO, "CSS hot reload {0}", enabled ? "enabled" : "disabled");
 
-        // Stop watch thread
-        if (watchThread != null) {
-            watchThread.interrupt();
-            try {
-                watchThread.join(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            watchThread = null;
-        }
-
-        // Close watch service
-        if (watchService != null) {
-            try {
-                watchService.close();
-            } catch (IOException e) {
-                logger.log(Level.WARNING, "Error closing WatchService: " + e.getMessage());
-            }
-            watchService = null;
-        }
-
-        initialized = false;
-        watchKeyToPath.clear();
-        monitoredRoots.clear();
-
-        logger.log(Level.INFO, "Hot reload disabled");
+        updateWatchServiceState();
     }
 
     /**
-     * Returns whether hot reload is currently enabled.
+     * Returns whether CSS hot reload is enabled.
      *
-     * @return true if hot reload is enabled
+     * @return true if CSS hot reload is enabled
+     */
+    public boolean isCssHotReloadEnabled() {
+        return cssHotReloadEnabled;
+    }
+
+    // ========== Convenience Methods ==========
+
+    /**
+     * Returns whether any hot reload feature is enabled.
+     *
+     * @return true if either FXML or CSS hot reload is enabled
      */
     public boolean isEnabled() {
-        return enabled;
+        return fxmlHotReloadEnabled || cssHotReloadEnabled;
     }
+
+    /**
+     * Legacy method for enabling hot reload.
+     *
+     * @deprecated Use {@link #setFxmlHotReloadEnabled(boolean)} and
+     *             {@link #setCssHotReloadEnabled(boolean)} instead.
+     */
+    @Deprecated
+    public synchronized void enable() {
+        setFxmlHotReloadEnabled(true);
+        setCssHotReloadEnabled(true);
+    }
+
+    /**
+     * Legacy method for disabling hot reload.
+     *
+     * @deprecated Use {@link #setFxmlHotReloadEnabled(boolean)} and
+     *             {@link #setCssHotReloadEnabled(boolean)} instead.
+     */
+    @Deprecated
+    public synchronized void disable() {
+        setFxmlHotReloadEnabled(false);
+        setCssHotReloadEnabled(false);
+    }
+
+    // ========== Component Registration ==========
 
     /**
      * Registers a component for hot reload monitoring.
@@ -251,7 +300,7 @@ public final class HotReloadManager {
      * @param component the component to register
      */
     public void register(HotReloadable component) {
-        if (!enabled) {
+        if (!isEnabled()) {
             return;
         }
 
@@ -277,6 +326,52 @@ public final class HotReloadManager {
 
         // Initialize monitoring if needed
         initializeMonitoringFromComponent(component);
+    }
+
+    // ========== Internal: WatchService Management ==========
+
+    /**
+     * Updates the WatchService state based on current configuration.
+     */
+    private void updateWatchServiceState() {
+        if (isEnabled()) {
+            // WatchService will be started when components register
+        } else {
+            // Stop WatchService if both FXML and CSS are disabled
+            stopWatchService();
+        }
+    }
+
+    /**
+     * Stops the WatchService and releases resources.
+     */
+    private synchronized void stopWatchService() {
+        // Stop watch thread
+        if (watchThread != null) {
+            watchThread.interrupt();
+            try {
+                watchThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            watchThread = null;
+        }
+
+        // Close watch service
+        if (watchService != null) {
+            try {
+                watchService.close();
+            } catch (IOException e) {
+                logger.log(Level.WARNING, "Error closing WatchService: " + e.getMessage());
+            }
+            watchService = null;
+        }
+
+        watchServiceInitialized = false;
+        watchKeyToPath.clear();
+        monitoredRoots.clear();
+
+        logger.log(Level.FINE, "WatchService stopped");
     }
 
     /**
@@ -361,7 +456,7 @@ public final class HotReloadManager {
                 logger.log(Level.INFO, "Monitoring source: {0}", sourceDir);
             }
 
-            initialized = true;
+            watchServiceInitialized = true;
 
         } catch (IOException e) {
             logger.log(Level.WARNING, "Failed to initialize monitoring: {0}", e.getMessage());
@@ -430,7 +525,7 @@ public final class HotReloadManager {
      * Main watch loop running on background thread.
      */
     private void watchLoop() {
-        while (enabled && !Thread.currentThread().isInterrupted()) {
+        while (isEnabled() && !Thread.currentThread().isInterrupted()) {
             try {
                 WatchKey key = watchService.take();
                 Path watchedDir = watchKeyToPath.get(key);
@@ -473,7 +568,7 @@ public final class HotReloadManager {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                if (enabled) {
+                if (isEnabled()) {
                     logger.log(Level.WARNING, "Error in watch loop: {0}", e.getMessage());
                 }
             }
@@ -482,17 +577,28 @@ public final class HotReloadManager {
         logger.log(Level.FINE, "Watch thread stopped");
     }
 
+    // ========== File Change Processing ==========
+
     /**
      * Processes a file change event.
      */
     private void processFileChange(Path changedFile, Path watchedDir, WatchEvent.Kind<?> kind) {
         String fileName = changedFile.getFileName().toString();
-        String extension = ReloadStrategy.getExtension(fileName);
-        ReloadStrategy strategy = ReloadStrategy.forExtension(extension);
+        String extension = getExtension(fileName);
 
-        // Skip ignored files
-        if (strategy == ReloadStrategy.IGNORE) {
+        // Determine file type and check if we should process it
+        boolean isFxml = "fxml".equals(extension);
+        boolean isCss = "css".equals(extension) || "bss".equals(extension);
+
+        // Skip if not a supported file type or the feature is disabled
+        if (isFxml && !fxmlHotReloadEnabled) {
             return;
+        }
+        if (isCss && !cssHotReloadEnabled) {
+            return;
+        }
+        if (!isFxml && !isCss) {
+            return;  // Not a supported file type
         }
 
         // Determine if this is a source or target change
@@ -518,179 +624,135 @@ public final class HotReloadManager {
             return;
         }
 
-        // Find all affected paths
-        Set<String> affectedFxmlPaths;
-        if (strategy == ReloadStrategy.STYLESHEET_RELOAD) {
-            // For CSS/BSS: find FXMLs that use this stylesheet
-            affectedFxmlPaths = findFxmlsUsingStylesheet(resourcePath);
+        // Find affected components and reload
+        if (isFxml) {
+            processFxmlChange(resourcePath);
         } else {
-            // For FXML: find affected paths via dependency graph
-            affectedFxmlPaths = findAffectedPaths(resourcePath);
+            processCssChange(resourcePath);
         }
+    }
+
+    /**
+     * Processes an FXML file change.
+     */
+    private void processFxmlChange(String resourcePath) {
+        Set<String> affectedPaths = findAffectedPaths(resourcePath);
+
+        if (affectedPaths.isEmpty()) {
+            logger.log(Level.FINE, "No registered components affected by: {0}", resourcePath);
+            return;
+        }
+
+        reloadComponentsFull(affectedPaths);
+    }
+
+    /**
+     * Processes a CSS/BSS file change.
+     */
+    private void processCssChange(String resourcePath) {
+        Set<String> affectedFxmlPaths = findFxmlsUsingStylesheet(resourcePath);
 
         if (affectedFxmlPaths.isEmpty()) {
             logger.log(Level.FINE, "No registered components affected by: {0}", resourcePath);
             return;
         }
 
-        // Reload components
-        reloadAffectedComponents(affectedFxmlPaths, strategy);
+        reloadComponentsStylesheet(affectedFxmlPaths);
     }
 
     /**
-     * Finds all FXML paths that use the given stylesheet.
-     *
-     * <p>Unlike FXML dependency propagation, CSS changes do NOT propagate
-     * to parent FXMLs. CSS styles are local to the FXML that uses them.
-     *
-     * @param stylesheetPath the changed stylesheet path
-     * @return set of FXML paths that directly use this stylesheet
+     * Performs full reload for affected components.
      */
-    private Set<String> findFxmlsUsingStylesheet(String stylesheetPath) {
-        Set<String> result = new LinkedHashSet<>();
+    private void reloadComponentsFull(Set<String> affectedPaths) {
+        Set<HotReloadable> componentsToReload = collectComponents(affectedPaths);
 
-        // Direct mapping from stylesheet to FXML
-        Set<String> directFxmls = stylesheetToFxml.get(stylesheetPath);
-        if (directFxmls != null) {
-            result.addAll(directFxmls);
-        }
-
-        // Fallback: check by base name if no mapping exists
-        // This handles cases where mapping wasn't built yet
-        if (result.isEmpty()) {
-            String baseName = getBaseName(stylesheetPath);
-            String parentDir = getParentPath(stylesheetPath);
-            String potentialFxml = (parentDir != null ? parentDir + "/" : "") + baseName + ".fxml";
-
-            if (componentsByPath.containsKey(potentialFxml)) {
-                result.add(potentialFxml);
-            }
-        }
-
-        // NOTE: We intentionally do NOT propagate to parent FXMLs here.
-        // CSS styles are local - changing Header.css should only affect
-        // HeaderView, not DashboardView that includes it via fx:include.
-
-        return result;
-    }
-
-    /**
-     * Gets the base name (without extension) from a path.
-     */
-    private String getBaseName(String path) {
-        int lastSlash = path.lastIndexOf('/');
-        String fileName = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
-
-        int lastDot = fileName.lastIndexOf('.');
-        return (lastDot > 0) ? fileName.substring(0, lastDot) : fileName;
-    }
-
-    /**
-     * Gets the parent path from a resource path.
-     */
-    private String getParentPath(String path) {
-        int lastSlash = path.lastIndexOf('/');
-        return (lastSlash > 0) ? path.substring(0, lastSlash) : null;
-    }
-
-    /**
-     * Checks if a directory is a source directory (vs target).
-     */
-    private boolean isSourceDirectory(Path dir) {
-        String path = dir.toString();
-        return path.contains("/src/main/resources") || path.contains("\\src\\main\\resources");
-    }
-
-    /**
-     * Calculates the classpath-relative resource path from a file path.
-     */
-    private String calculateResourcePath(Path changedFile, Path watchedDir) {
-        // Find the monitored root that contains this directory
-        Path root = findMonitoredRoot(watchedDir);
-        if (root == null) {
-            return null;
-        }
-
-        try {
-            Path relativePath = root.relativize(changedFile);
-            // Normalize to forward slashes
-            return relativePath.toString().replace('\\', '/');
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Finds the monitored root directory containing the given directory.
-     */
-    private Path findMonitoredRoot(Path dir) {
-        for (Path root : monitoredRoots) {
-            if (dir.startsWith(root) || dir.equals(root)) {
-                return root;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Syncs a source file to the target directory.
-     */
-    private void syncToTarget(Path sourceFile, Path sourceDir) {
-        Path sourceRoot = findMonitoredRoot(sourceDir);
-        if (sourceRoot == null) {
+        if (componentsToReload.isEmpty()) {
             return;
         }
 
-        Path targetRoot = inferTargetDirectory(sourceRoot);
-        if (targetRoot == null || !Files.exists(targetRoot)) {
+        logger.log(Level.INFO, "Full reload: {0} component(s)", componentsToReload.size());
+
+        Platform.runLater(() -> {
+            for (HotReloadable component : componentsToReload) {
+                try {
+                    component.reload();
+                    logger.log(Level.FINE, "Reloaded: {0}", component.getClass().getSimpleName());
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Failed to reload {0}: {1}",
+                            new Object[]{component.getClass().getSimpleName(), e.getMessage()});
+                }
+            }
+            logger.log(Level.INFO, "Hot reload complete");
+        });
+    }
+
+    /**
+     * Performs stylesheet refresh for affected components.
+     */
+    private void reloadComponentsStylesheet(Set<String> affectedPaths) {
+        Set<HotReloadable> componentsToReload = collectComponents(affectedPaths);
+
+        if (componentsToReload.isEmpty()) {
             return;
         }
 
-        try {
-            Path relativePath = sourceRoot.relativize(sourceFile);
-            Path targetFile = targetRoot.resolve(relativePath);
+        logger.log(Level.INFO, "Stylesheet refresh: {0} component(s)", componentsToReload.size());
 
-            // Ensure parent directories exist
-            Files.createDirectories(targetFile.getParent());
+        Platform.runLater(() -> {
+            for (HotReloadable component : componentsToReload) {
+                try {
+                    Parent root = component.getRootForStyleRefresh();
+                    if (root != null) {
+                        refreshStylesheets(root);
+                        logger.log(Level.FINE, "Stylesheet refreshed: {0}",
+                                component.getClass().getSimpleName());
+                    } else {
+                        // Fallback to full reload
+                        component.reload();
+                        logger.log(Level.FINE, "Fallback reload: {0}",
+                                component.getClass().getSimpleName());
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Failed to refresh {0}: {1}",
+                            new Object[]{component.getClass().getSimpleName(), e.getMessage()});
+                }
+            }
+            logger.log(Level.INFO, "Hot reload complete");
+        });
+    }
 
-            // Copy file
-            Files.copy(sourceFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
-            logger.log(Level.FINE, "Synced to target: {0}", relativePath);
+    /**
+     * Refreshes stylesheets for a Parent node and all its children.
+     */
+    private void refreshStylesheets(Parent root) {
+        var stylesheets = new ArrayList<>(root.getStylesheets());
+        if (!stylesheets.isEmpty()) {
+            root.getStylesheets().clear();
+            root.getStylesheets().addAll(stylesheets);
+        }
 
-        } catch (IOException e) {
-            logger.log(Level.FINE, "Failed to sync to target: {0}", e.getMessage());
+        for (var child : root.getChildrenUnmodifiable()) {
+            if (child instanceof Parent childParent) {
+                refreshStylesheets(childParent);
+            }
         }
     }
 
     /**
-     * Infers the target directory from a source directory.
+     * Collects all components for the given paths.
      */
-    private Path inferTargetDirectory(Path sourceRoot) {
-        String path = sourceRoot.toString();
-
-        // src/main/resources -> target/classes (Maven)
-        if (path.contains("/src/main/resources") || path.contains("\\src\\main\\resources")) {
-            String projectPath = path.replaceAll("[/\\\\]src[/\\\\]main[/\\\\]resources.*", "");
-            return Path.of(projectPath, "target", "classes");
+    private Set<HotReloadable> collectComponents(Set<String> paths) {
+        Set<HotReloadable> components = new LinkedHashSet<>();
+        for (String path : paths) {
+            List<HotReloadable> list = componentsByPath.get(path);
+            if (list != null) {
+                components.addAll(list);
+            }
         }
-
-        return null;
+        return components;
     }
 
-    /**
-     * Debounce check - returns true if enough time has passed since last reload.
-     */
-    private boolean shouldReload(String resourcePath) {
-        long now = System.currentTimeMillis();
-        Long lastTime = lastReloadTime.get(resourcePath);
-
-        if (lastTime != null && (now - lastTime) < DEBOUNCE_MILLIS) {
-            return false;
-        }
-
-        lastReloadTime.put(resourcePath, now);
-        return true;
-    }
+    // ========== Dependency Analysis ==========
 
     /**
      * Builds the dependency graph for a component's FXML.
@@ -742,51 +804,6 @@ public final class HotReloadManager {
 
         logger.log(Level.FINEST, "Stylesheet mapping: {0}, {1} -> {2}",
                 new Object[]{cssPath, bssPath, fxmlPath});
-
-        // TODO: Parse FXML to find explicitly declared stylesheets
-        // This would require reading the FXML and extracting stylesheet attributes
-        // For now, rely on same-name convention
-    }
-
-    /**
-     * Converts a URI to a classpath-relative resource path.
-     */
-    private String uriToResourcePath(URI uri) {
-        String path = uri.getPath();
-        if (path == null) {
-            return null;
-        }
-
-        // Handle JAR URLs: jar:file:/path/app.jar!/com/example/View.fxml
-        int bangIndex = path.indexOf("!/");
-        if (bangIndex >= 0) {
-            path = path.substring(bangIndex + 2);
-        }
-
-        // Remove /classes/ prefix (Maven)
-        int classesIndex = path.indexOf("/classes/");
-        if (classesIndex >= 0) {
-            return path.substring(classesIndex + "/classes/".length());
-        }
-
-        // Remove /build/classes/java/main/ prefix (Gradle)
-        int gradleIndex = path.indexOf("/build/classes/java/main/");
-        if (gradleIndex >= 0) {
-            return path.substring(gradleIndex + "/build/classes/java/main/".length());
-        }
-
-        // Remove /build/resources/main/ prefix (Gradle)
-        int resourcesIndex = path.indexOf("/build/resources/main/");
-        if (resourcesIndex >= 0) {
-            return path.substring(resourcesIndex + "/build/resources/main/".length());
-        }
-
-        // Remove leading slash
-        if (path.startsWith("/")) {
-            path = path.substring(1);
-        }
-
-        return path;
     }
 
     /**
@@ -824,46 +841,206 @@ public final class HotReloadManager {
     }
 
     /**
-     * Reloads all components affected by the changed paths.
+     * Finds all FXML paths that use the given stylesheet.
+     *
+     * <p>CSS changes do NOT propagate to parent FXMLs.
      */
-    private void reloadAffectedComponents(Set<String> affectedPaths, ReloadStrategy strategy) {
-        Set<HotReloadable> componentsToReload = new LinkedHashSet<>();
+    private Set<String> findFxmlsUsingStylesheet(String stylesheetPath) {
+        Set<String> result = new LinkedHashSet<>();
 
-        for (String path : affectedPaths) {
-            List<HotReloadable> components = componentsByPath.get(path);
-            if (components != null) {
-                componentsToReload.addAll(components);
+        // Direct mapping from stylesheet to FXML
+        Set<String> directFxmls = stylesheetToFxml.get(stylesheetPath);
+        if (directFxmls != null) {
+            result.addAll(directFxmls);
+        }
+
+        // Fallback: check by base name if no mapping exists
+        if (result.isEmpty()) {
+            String baseName = getBaseName(stylesheetPath);
+            String parentDir = getParentPath(stylesheetPath);
+            String potentialFxml = (parentDir != null ? parentDir + "/" : "") + baseName + ".fxml";
+
+            if (componentsByPath.containsKey(potentialFxml)) {
+                result.add(potentialFxml);
             }
         }
 
-        if (componentsToReload.isEmpty()) {
-            logger.log(Level.FINEST, "No registered components for affected paths");
+        return result;
+    }
+
+    // ========== Utility Methods ==========
+
+    /**
+     * Converts a URI to a classpath-relative resource path.
+     */
+    private String uriToResourcePath(URI uri) {
+        String path = uri.getPath();
+        if (path == null) {
+            return null;
+        }
+
+        // Handle JAR URLs
+        int bangIndex = path.indexOf("!/");
+        if (bangIndex >= 0) {
+            path = path.substring(bangIndex + 2);
+        }
+
+        // Remove /classes/ prefix (Maven)
+        int classesIndex = path.indexOf("/classes/");
+        if (classesIndex >= 0) {
+            return path.substring(classesIndex + "/classes/".length());
+        }
+
+        // Remove /build/classes/java/main/ prefix (Gradle)
+        int gradleIndex = path.indexOf("/build/classes/java/main/");
+        if (gradleIndex >= 0) {
+            return path.substring(gradleIndex + "/build/classes/java/main/".length());
+        }
+
+        // Remove /build/resources/main/ prefix (Gradle)
+        int resourcesIndex = path.indexOf("/build/resources/main/");
+        if (resourcesIndex >= 0) {
+            return path.substring(resourcesIndex + "/build/resources/main/".length());
+        }
+
+        // Remove leading slash
+        if (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+
+        return path;
+    }
+
+    /**
+     * Gets the file extension from a file name.
+     */
+    private String getExtension(String fileName) {
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot > 0 && lastDot < fileName.length() - 1) {
+            return fileName.substring(lastDot + 1).toLowerCase();
+        }
+        return "";
+    }
+
+    /**
+     * Gets the base name (without extension) from a path.
+     */
+    private String getBaseName(String path) {
+        int lastSlash = path.lastIndexOf('/');
+        String fileName = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
+
+        int lastDot = fileName.lastIndexOf('.');
+        return (lastDot > 0) ? fileName.substring(0, lastDot) : fileName;
+    }
+
+    /**
+     * Gets the parent path from a resource path.
+     */
+    private String getParentPath(String path) {
+        int lastSlash = path.lastIndexOf('/');
+        return (lastSlash > 0) ? path.substring(0, lastSlash) : null;
+    }
+
+    /**
+     * Checks if a directory is a source directory (vs target).
+     */
+    private boolean isSourceDirectory(Path dir) {
+        String path = dir.toString();
+        return path.contains("/src/main/resources") || path.contains("\\src\\main\\resources");
+    }
+
+    /**
+     * Calculates the classpath-relative resource path from a file path.
+     */
+    private String calculateResourcePath(Path changedFile, Path watchedDir) {
+        Path root = findMonitoredRoot(watchedDir);
+        if (root == null) {
+            return null;
+        }
+
+        try {
+            Path relativePath = root.relativize(changedFile);
+            return relativePath.toString().replace('\\', '/');
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Finds the monitored root directory containing the given directory.
+     */
+    private Path findMonitoredRoot(Path dir) {
+        for (Path root : monitoredRoots) {
+            if (dir.startsWith(root) || dir.equals(root)) {
+                return root;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Syncs a source file to the target directory.
+     */
+    private void syncToTarget(Path sourceFile, Path sourceDir) {
+        Path sourceRoot = findMonitoredRoot(sourceDir);
+        if (sourceRoot == null) {
             return;
         }
 
-        logger.log(Level.INFO, "Reloading {0} component(s) using {1}",
-                new Object[]{componentsToReload.size(), strategy});
+        Path targetRoot = inferTargetDirectory(sourceRoot);
+        if (targetRoot == null || !Files.exists(targetRoot)) {
+            return;
+        }
 
-        // Execute reload on JavaFX thread
-        Platform.runLater(() -> {
-            for (HotReloadable component : componentsToReload) {
-                try {
-                    strategy.apply(component);
-                    logger.log(Level.FINE, "Reloaded: {0}", component.getClass().getSimpleName());
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Failed to reload {0}: {1}",
-                            new Object[]{component.getClass().getSimpleName(), e.getMessage()});
-                }
-            }
-            logger.log(Level.INFO, "Hot reload complete");
-        });
+        try {
+            Path relativePath = sourceRoot.relativize(sourceFile);
+            Path targetFile = targetRoot.resolve(relativePath);
+
+            Files.createDirectories(targetFile.getParent());
+            Files.copy(sourceFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
+            logger.log(Level.FINE, "Synced to target: {0}", relativePath);
+
+        } catch (IOException e) {
+            logger.log(Level.FINE, "Failed to sync to target: {0}", e.getMessage());
+        }
+    }
+
+    /**
+     * Infers the target directory from a source directory.
+     */
+    private Path inferTargetDirectory(Path sourceRoot) {
+        String path = sourceRoot.toString();
+
+        if (path.contains("/src/main/resources") || path.contains("\\src\\main\\resources")) {
+            String projectPath = path.replaceAll("[/\\\\]src[/\\\\]main[/\\\\]resources.*", "");
+            return Path.of(projectPath, "target", "classes");
+        }
+
+        return null;
+    }
+
+    /**
+     * Debounce check - returns true if enough time has passed since last reload.
+     */
+    private boolean shouldReload(String resourcePath) {
+        long now = System.currentTimeMillis();
+        Long lastTime = lastReloadTime.get(resourcePath);
+
+        if (lastTime != null && (now - lastTime) < DEBOUNCE_MILLIS) {
+            return false;
+        }
+
+        lastReloadTime.put(resourcePath, now);
+        return true;
     }
 
     /**
      * Clears all internal state. Primarily for testing.
      */
     public synchronized void reset() {
-        disable();
+        fxmlHotReloadEnabled = false;
+        cssHotReloadEnabled = false;
+        stopWatchService();
         componentsByPath.clear();
         dependencyGraph.clear();
         stylesheetToFxml.clear();

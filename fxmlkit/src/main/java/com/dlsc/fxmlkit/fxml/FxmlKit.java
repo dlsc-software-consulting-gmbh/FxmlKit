@@ -3,7 +3,6 @@ package com.dlsc.fxmlkit.fxml;
 import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.core.LiteDiAdapter;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
-import com.dlsc.fxmlkit.hotreload.ReloadStrategy;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 
 import java.util.ArrayList;
@@ -22,32 +21,37 @@ import java.util.logging.Logger;
  * enable dependency injection as needed.
  *
  * <h2>Hot Reload Support</h2>
- * <p>FxmlKit supports automatic FXML and CSS hot reload during development:
+ * <p>FxmlKit supports automatic hot reload for FXML and CSS files during development.
+ *
+ * <h3>Quick Start (Development Mode)</h3>
  * <pre>{@code
- * // Enable at application startup (development mode only)
- * if (isDevelopmentMode()) {
- *     FxmlKit.enableHotReload();
- * }
+ * // Enable all development features with one call
+ * FxmlKit.enableDevelopmentMode();
  *
  * // Views automatically register for hot reload
  * MainView view = new MainView();
- *
- * // Disable at shutdown
- * FxmlKit.disableHotReload();
  * }</pre>
  *
- * <h3>CSS Hot Reload with CSSFX</h3>
- * <p>For advanced CSS hot reload scenarios (e.g., shared stylesheets, Scene-level
- * styles), you can use CSSFX alongside FxmlKit:
+ * <h3>Fine-Grained Control</h3>
  * <pre>{@code
- * // Option 1: Use FxmlKit for both FXML and CSS (default, zero-config)
- * FxmlKit.enableHotReload();
+ * // Control FXML and CSS hot reload independently
+ * FxmlKit.setFxmlHotReloadEnabled(true);
+ * FxmlKit.setCssHotReloadEnabled(true);
  *
- * // Option 2: Use FxmlKit for FXML, CSSFX for CSS (advanced)
- * FxmlKit.enableHotReload();
- * FxmlKit.setCssHotReloadEnabled(false);  // Disable FxmlKit CSS handling
+ * // Or use CSSFX for CSS hot reload
+ * FxmlKit.setFxmlHotReloadEnabled(true);
+ * FxmlKit.setCssHotReloadEnabled(false);  // Disable built-in CSS handling
  * CSSFX.start();                          // Use CSSFX instead
  * }</pre>
+ *
+ * <h3>What Can Be Hot-Reloaded</h3>
+ * <table border="1">
+ *   <tr><th>File Type</th><th>Support</th><th>Notes</th></tr>
+ *   <tr><td>.fxml</td><td>Yes</td><td>Full reload, loses runtime state</td></tr>
+ *   <tr><td>.css, .bss</td><td>Yes</td><td>Stylesheet refresh, preserves state</td></tr>
+ *   <tr><td>.properties</td><td>No</td><td>Java ResourceBundle caching limitation</td></tr>
+ *   <tr><td>.png, .jpg, etc.</td><td>No</td><td>JavaFX Image caching limitation</td></tr>
+ * </table>
  *
  * <h2>Three-Tier Progressive Design</h2>
  *
@@ -55,15 +59,15 @@ import java.util.logging.Logger;
  * <pre>{@code
  * // No configuration needed!
  * MainView view = new MainView();
- * Parent root = view;  // Works immediately
+ * stage.setScene(new Scene(view));
  * }</pre>
  *
  * <h3>Tier 2: Global DI Mode (Single-User Desktop)</h3>
  * <pre>{@code
  * // One-time setup
- * LiteDiAdapter injector = new LiteDiAdapter();
- * injector.bindInstance(UserService.class, new UserService());
- * FxmlKit.setDiAdapter(injector);
+ * LiteDiAdapter di = new LiteDiAdapter();
+ * di.bindInstance(UserService.class, new UserService());
+ * FxmlKit.setDiAdapter(di);
  *
  * MainView view = new MainView();  // Full DI support
  * }</pre>
@@ -105,106 +109,124 @@ public final class FxmlKit {
     private FxmlKit() {
     }
 
+    // ========== Development Mode ==========
+
     /**
-     * Enables or disables hot reload functionality for development.
+     * Enables development mode with all hot reload features.
      *
-     * <p>When enabled, FxmlKit automatically monitors FXML and CSS files for changes
-     * and reloads views when modifications are detected. This feature is intended for
-     * development use only and should be disabled in production builds.
-     *
-     * <h3>What Gets Monitored</h3>
-     * <ul>
-     *   <li><b>FXML files:</b> Structure changes trigger full view reload</li>
-     *   <li><b>CSS/BSS files:</b> Style changes trigger stylesheet refresh (if enabled)</li>
-     *   <li><b>Property files:</b> Resource bundle changes trigger full reload</li>
-     *   <li><b>Image files:</b> Image resource changes trigger full reload</li>
-     * </ul>
-     *
-     * <h3>CSS Hot Reload Control</h3>
-     * <p>CSS hot reload is enabled by default. To use CSSFX instead, disable it:
+     * <p>This is a convenience method that enables both FXML and CSS hot reload.
+     * Equivalent to:
      * <pre>{@code
-     * FxmlKit.setHotReloadEnabled(true);
-     * FxmlKit.setCssHotReloadEnabled(false);  // Use CSSFX
-     * CSSFX.start();
+     * FxmlKit.setFxmlHotReloadEnabled(true);
+     * FxmlKit.setCssHotReloadEnabled(true);
      * }</pre>
      *
-     * <h3>Usage Example</h3>
+     * <p>Call this during application startup in development mode:
      * <pre>{@code
      * public class MyApp extends Application {
      *     @Override
      *     public void start(Stage stage) {
-     *         // Enable in development mode
      *         if (isDevelopmentMode()) {
-     *             FxmlKit.setHotReloadEnabled(true);
+     *             FxmlKit.enableDevelopmentMode();
      *         }
-     *
-     *         MainView view = new MainView();
-     *         stage.setScene(new Scene(view));
-     *         stage.show();
-     *     }
-     *
-     *     @Override
-     *     public void stop() {
-     *         // Clean up resources
-     *         FxmlKit.setHotReloadEnabled(false);
+     *         // ...
      *     }
      *
      *     private boolean isDevelopmentMode() {
-     *         return Boolean.getBoolean("fxmlkit.hotreload") ||
+     *         return Boolean.getBoolean("fxmlkit.dev") ||
      *                "development".equalsIgnoreCase(System.getProperty("env"));
      *     }
      * }
      * }</pre>
      *
-     * <h3>Performance Notes</h3>
-     * <p>Hot reload uses native file system monitoring (WatchService) which has minimal
-     * performance impact. However, it should still be disabled in production to avoid
-     * unnecessary resource allocation.
-     *
-     * @param enabled true to enable hot reload, false to disable and release resources
-     * @see #isHotReloadEnabled()
+     * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
      */
-    public static void setHotReloadEnabled(boolean enabled) {
-        if (enabled) {
-            HotReloadManager.getInstance().enable();
-        } else {
-            HotReloadManager.getInstance().disable();
-        }
+    public static void enableDevelopmentMode() {
+        setFxmlHotReloadEnabled(true);
+        setCssHotReloadEnabled(true);
     }
 
     /**
-     * Checks if hot reload is currently enabled.
+     * Disables development mode and releases all hot reload resources.
      *
-     * @return true if hot reload is enabled
+     * <p>This is a convenience method that disables both FXML and CSS hot reload.
+     * Call this at application shutdown to release resources.
+     *
+     * @see #setFxmlHotReloadEnabled(boolean)
+     * @see #setCssHotReloadEnabled(boolean)
      */
-    public static boolean isHotReloadEnabled() {
-        return HotReloadManager.getInstance().isEnabled();
+    public static void disableDevelopmentMode() {
+        setFxmlHotReloadEnabled(false);
+        setCssHotReloadEnabled(false);
     }
+
+    // ========== FXML Hot Reload ==========
+
+    /**
+     * Enables or disables FXML hot reload.
+     *
+     * <p>When enabled, FxmlKit monitors .fxml files for changes and automatically
+     * reloads affected views. This triggers a full view reload, which means all
+     * runtime state (user input, scroll position, etc.) will be lost.
+     *
+     * <p>FXML hot reload also handles fx:include dependencies - when a child FXML
+     * changes, all parent views that include it will also be reloaded.
+     *
+     * <h3>Technical Details</h3>
+     * <ul>
+     *   <li>Uses native file system WatchService for minimal CPU overhead</li>
+     *   <li>Monitors both source (src/main/resources) and target (target/classes) directories</li>
+     *   <li>Includes 500ms debouncing to prevent duplicate reloads</li>
+     *   <li>Automatically syncs source changes to target directory</li>
+     * </ul>
+     *
+     * @param enabled true to enable FXML hot reload, false to disable
+     * @see #isFxmlHotReloadEnabled()
+     * @see #setCssHotReloadEnabled(boolean)
+     */
+    public static void setFxmlHotReloadEnabled(boolean enabled) {
+        HotReloadManager.getInstance().setFxmlHotReloadEnabled(enabled);
+    }
+
+    /**
+     * Checks if FXML hot reload is currently enabled.
+     *
+     * @return true if FXML hot reload is enabled
+     * @see #setFxmlHotReloadEnabled(boolean)
+     */
+    public static boolean isFxmlHotReloadEnabled() {
+        return HotReloadManager.getInstance().isFxmlHotReloadEnabled();
+    }
+
+    // ========== CSS Hot Reload ==========
 
     /**
      * Enables or disables CSS/BSS hot reload.
      *
-     * <p>By default, CSS hot reload is enabled. You may want to disable it when:
-     * <ul>
-     *   <li>Using CSSFX for more comprehensive CSS hot reload</li>
-     *   <li>Using shared stylesheets that FxmlKit doesn't track</li>
-     *   <li>Experiencing conflicts with other CSS management tools</li>
-     * </ul>
+     * <p>When enabled, FxmlKit monitors .css and .bss files for changes and
+     * refreshes stylesheets without a full view reload. This preserves all
+     * runtime state, making it ideal for rapid style iteration.
      *
-     * <p>Example with CSSFX:
+     * <p>CSS hot reload only affects the FXML that directly uses the stylesheet
+     * (via same-name convention). It does not propagate to parent FXMLs that
+     * include the affected view via fx:include.
+     *
+     * <h3>Using CSSFX Instead</h3>
+     * <p>For advanced CSS scenarios (shared stylesheets, Scene-level styles),
+     * you can use CSSFX instead of the built-in CSS hot reload:
      * <pre>{@code
-     * // Enable FXML hot reload, but use CSSFX for CSS
-     * FxmlKit.enableHotReload();
-     * FxmlKit.setCssHotReloadEnabled(false);
-     * CSSFX.start();
+     * FxmlKit.setFxmlHotReloadEnabled(true);
+     * FxmlKit.setCssHotReloadEnabled(false);  // Disable built-in CSS handling
+     * CSSFX.start();                          // Use CSSFX instead
      * }</pre>
      *
-     * @param enabled true to enable CSS hot reload (default), false to disable
+     * @param enabled true to enable CSS hot reload, false to disable
      * @see #isCssHotReloadEnabled()
+     * @see #setFxmlHotReloadEnabled(boolean)
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
-        ReloadStrategy.setCssReloadEnabled(enabled);
+        HotReloadManager.getInstance().setCssHotReloadEnabled(enabled);
     }
 
     /**
@@ -214,7 +236,7 @@ public final class FxmlKit {
      * @see #setCssHotReloadEnabled(boolean)
      */
     public static boolean isCssHotReloadEnabled() {
-        return ReloadStrategy.isCssReloadEnabled();
+        return HotReloadManager.getInstance().isCssHotReloadEnabled();
     }
 
     // ========== Logging Configuration ==========
@@ -350,7 +372,6 @@ public final class FxmlKit {
         EXCLUDE_NODE_TYPES.clear();
         SKIP_PACKAGE_PREFIXES.clear();
         SKIP_PACKAGE_PREFIXES.addAll(DEFAULT_SKIP_PACKAGE_PREFIXES);
-        ReloadStrategy.setCssReloadEnabled(true);
         HotReloadManager.getInstance().reset();
     }
 }
