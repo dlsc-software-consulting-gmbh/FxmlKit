@@ -24,8 +24,7 @@ import java.util.logging.Logger;
 /**
  * Global CSS monitoring for hot reload functionality.
  *
- * <p>This class provides comprehensive CSS hot reload by monitoring all stylesheets
- * across the entire JavaFX scene graph, including:
+ * <p>Monitors all stylesheets across the JavaFX scene graph:
  * <ul>
  *   <li>Scene-level stylesheets</li>
  *   <li>Parent node stylesheets at any depth</li>
@@ -33,30 +32,13 @@ import java.util.logging.Logger;
  *   <li>Shared stylesheets used by multiple nodes</li>
  * </ul>
  *
- * <h2>Memory Management</h2>
- * <p>Uses WeakReferences to track stylesheet lists, preventing memory leaks when
- * nodes are garbage collected. Stale references are cleaned up lazily during
- * refresh operations.
+ * <p>Uses WeakReferences to track stylesheet lists. Stale references are
+ * cleaned up during refresh operations.
  *
- * <h2>CSS Refresh Mechanism</h2>
- * <p>When a CSS file changes, the stylesheet URI is converted to a file:// URI
- * pointing to the source file. This forces JavaFX to re-read the file content,
- * making the changes visible immediately.
+ * <p>When a CSS file changes, the stylesheet URI is replaced with a file:// URI
+ * pointing to the source file, causing JavaFX to re-read the file content.
  *
- * <h2>Thread Safety</h2>
- * <p>All public methods are thread-safe. Scene graph operations are always
- * executed on the JavaFX Application Thread via Platform.runLater().
- *
- * <h2>Usage</h2>
- * <pre>{@code
- * // Enable global CSS monitoring
- * GlobalCssMonitor monitor = new GlobalCssMonitor();
- * monitor.setProjectRoot(projectPath);
- * monitor.startMonitoring();
- *
- * // When CSS file changes (called by HotReloadManager)
- * monitor.refreshStylesheet("com/example/app.css");
- * }</pre>
+ * <p>Thread-safe. Scene graph operations are executed on the JavaFX Application Thread.
  *
  * @see HotReloadManager
  * @see StylesheetUriConverter
@@ -118,7 +100,7 @@ public class GlobalCssMonitor {
     /**
      * Sets the project root directory.
      *
-     * <p>This is used to locate source files for CSS when converting classpath URIs
+     * <p>Used to locate source files for CSS when converting classpath URIs
      * to file:// URIs.
      *
      * @param projectRoot the project root directory
@@ -140,11 +122,11 @@ public class GlobalCssMonitor {
     /**
      * Starts global CSS monitoring.
      *
-     * <p>This method monitors all existing windows and scenes, and registers
-     * listeners to detect new windows, scenes, and nodes as they are added.
+     * <p>Monitors all existing windows and scenes, and registers listeners to
+     * detect new windows, scenes, and nodes as they are added.
      *
-     * <p>Must be called from the JavaFX Application Thread or will use
-     * Platform.runLater() to execute on the FX thread.
+     * <p>If not called from the JavaFX Application Thread, executes via
+     * Platform.runLater().
      */
     public void startMonitoring() {
         if (monitoring) {
@@ -294,7 +276,7 @@ public class GlobalCssMonitor {
         }
 
         // Register this node's stylesheets (includes adding listener)
-        // Note: registerStylesheetList handles empty lists too, for future additions
+        // Register stylesheets (handles empty lists for future additions)
         registerStylesheetList(parent.getStylesheets(), parent.getClass().getSimpleName());
 
         // Monitor current children
@@ -318,9 +300,9 @@ public class GlobalCssMonitor {
     /**
      * Registers a stylesheet list for monitoring.
      *
-     * <p>This method handles both initial registration of existing stylesheets
-     * and sets up a listener for future changes. It's safe to call multiple times
-     * for the same list - duplicate listeners are prevented.
+     * <p>Handles both initial registration of existing stylesheets and sets up
+     * a listener for future changes. Safe to call multiple times for the same
+     * list - duplicate listeners are prevented.
      *
      * @param stylesheets the stylesheet list to monitor (may be empty)
      * @param ownerName   descriptive name for logging
@@ -384,9 +366,9 @@ public class GlobalCssMonitor {
     /**
      * Refreshes all stylesheets that match the given resource path.
      *
-     * <p>This method is called when a CSS file change is detected. It finds all
-     * stylesheet lists that use this resource and refreshes them by replacing
-     * the classpath URI with a file:// URI pointing to the source file.
+     * <p>Called when a CSS file change is detected. Finds all stylesheet lists
+     * that use the resource and refreshes them by replacing the classpath URI
+     * with a file:// URI pointing to the source file.
      *
      * @param changedResourcePath the resource path that changed (e.g., "com/example/app.css")
      */
@@ -460,7 +442,7 @@ public class GlobalCssMonitor {
 
                 if (sourceFileUri != null) {
                     // Replace with file:// URI pointing to source file
-                    // This is the key to making hot reload work!
+                    // Replace with file:// URI to bypass cache
                     newUri = sourceFileUri;
                 } else {
                     // Fallback: remove query string and do in-place replacement
@@ -492,8 +474,7 @@ public class GlobalCssMonitor {
     /**
      * Refreshes all stylesheets across all monitored nodes.
      *
-     * <p>This is a fallback method that can be used when the specific changed
-     * resource path is unknown.
+     * <p>Fallback method for when the specific changed resource path is unknown.
      */
     public void refreshAllStylesheets() {
         if (!monitoring) {
@@ -556,8 +537,7 @@ public class GlobalCssMonitor {
     /**
      * Cleans up stale weak references.
      *
-     * <p>This is called automatically during refresh operations, but can also
-     * be called manually if needed.
+     * <p>Called automatically during refresh operations. Can also be called manually.
      */
     public void cleanupStaleReferences() {
         for (List<WeakReference<ObservableList<String>>> refs : stylesheetOwners.values()) {

@@ -7,28 +7,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Utility class for converting various CSS URI formats to resource paths and source file paths.
+ * Utility for converting CSS URI formats to resource paths and source file paths.
  *
- * <p>This class handles the complexity of mapping different URI formats that JavaFX uses
- * for stylesheets back to their source file locations for hot reload functionality.
- *
- * <h2>Supported URI Formats</h2>
+ * <p>Supported URI formats:
  * <ul>
- *   <li>{@code file:///path/to/target/classes/com/example/app.css} - File URI from classpath</li>
- *   <li>{@code jar:file:///path/to/app.jar!/com/example/app.css} - JAR URI</li>
- *   <li>{@code com/example/app.css} - Classpath relative path</li>
- *   <li>{@code /com/example/app.css} - Classpath absolute path</li>
+ *   <li>{@code file:///path/to/target/classes/com/example/app.css}</li>
+ *   <li>{@code jar:file:///path/to/app.jar!/com/example/app.css}</li>
+ *   <li>{@code com/example/app.css} (classpath relative)</li>
+ *   <li>{@code /com/example/app.css} (classpath absolute)</li>
  * </ul>
  *
- * <h2>Build System Support</h2>
- * <ul>
- *   <li>Maven: {@code target/classes/} and {@code target/test-classes/}</li>
- *   <li>Gradle: {@code build/resources/main/} and {@code build/classes/java/main/}</li>
- *   <li>IntelliJ: {@code out/production/resources/}, {@code out/production/classes/},
- *       {@code out/test/resources/}, and {@code out/test/classes/}</li>
- * </ul>
+ * <p>Supported build systems: Maven, Gradle, IntelliJ IDEA.
  *
- * <p>Thread-safe: all methods are stateless and can be called from any thread.
+ * <p>Thread-safe.
  *
  * @see HotReloadManager
  */
@@ -71,8 +62,7 @@ public final class StylesheetUriConverter {
                 return extractResourcePathFromJarUri(uri);
             }
 
-            // Handle @ prefix (FXML relative path) - these are already converted by JavaFX
-            // by the time we see them, so this is just a safety check
+            // Handle @ prefix (FXML relative path) - already converted by JavaFX
             if (uri.startsWith("@")) {
                 logger.log(Level.FINE, "Relative path URI not supported for global monitoring: {0}", uri);
                 return null;
@@ -247,9 +237,8 @@ public final class StylesheetUriConverter {
     /**
      * Converts a stylesheet URI to a file:// URI pointing to the source file.
      *
-     * <p>This is the key operation for making CSS hot reload work - by replacing
-     * the classpath URI with a file:// URI, JavaFX will re-read the file content
-     * on each style refresh.
+     * <p>Replaces the classpath URI with a file:// URI, bypassing JavaFX
+     * stylesheet cache.
      *
      * @param originalUri the original stylesheet URI
      * @param projectRoot the project root directory
@@ -272,9 +261,8 @@ public final class StylesheetUriConverter {
     /**
      * Checks if a stylesheet URI matches a given resource path.
      *
-     * <p>This performs an exact match after normalizing the URI to a resource path.
-     * Filename-only matching is intentionally not supported to avoid false positives
-     * (e.g., "com/a/app.css" should not match "com/b/app.css").
+     * <p>Performs exact match after normalizing the URI to a resource path.
+     * Filename-only matching is not performed.
      *
      * @param stylesheetUri  the stylesheet URI
      * @param resourcePath   the resource path to match

@@ -246,7 +246,7 @@ public final class HotReloadManager {
     /**
      * Enables or disables global CSS monitoring.
      *
-     * <p>When enabled, monitors all stylesheets across the entire JavaFX scene graph:
+     * <p>When enabled, monitors all stylesheets across the scene graph:
      * <ul>
      *   <li>Scene-level stylesheets</li>
      *   <li>All Parent node stylesheets</li>
@@ -256,13 +256,6 @@ public final class HotReloadManager {
      *
      * <p>When disabled (default), only monitors CSS files with the same name as
      * registered FXML files (e.g., UserView.fxml → UserView.css).
-     *
-     * <p>Global monitoring is recommended for applications that use:
-     * <ul>
-     *   <li>Scene-level theme stylesheets</li>
-     *   <li>Shared component stylesheets</li>
-     *   <li>Dynamically loaded styles</li>
-     * </ul>
      *
      * @param enabled true to enable global CSS monitoring, false for component-based only
      */
@@ -829,9 +822,8 @@ public final class HotReloadManager {
     /**
      * Refreshes stylesheets for a Parent node and all its children.
      *
-     * <p>This method converts classpath URIs to file:// URIs pointing to source files,
-     * which forces JavaFX to re-read the CSS content. This is the key to making
-     * CSS hot reload work reliably.
+     * <p>Converts classpath URIs to file:// URIs pointing to source files,
+     * bypassing JavaFX stylesheet cache.
      *
      * @param root the root node to refresh
      * @param cssResourcePath the CSS resource path that changed
@@ -846,7 +838,7 @@ public final class HotReloadManager {
             if (StylesheetUriConverter.matchesResourcePath(uri, cssResourcePath)) {
                 if (sourceFileUri != null) {
                     // Replace with file:// URI pointing to source file
-                    // This is the key to making hot reload work!
+                    // Replace with file:// URI to bypass cache
                     if (!sourceFileUri.equals(uri)) {
                         stylesheets.set(i, sourceFileUri);
                         logger.log(Level.FINE, "Replaced stylesheet: {0} -> {1}",
