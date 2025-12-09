@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,8 +41,8 @@ import java.util.logging.Logger;
  *
  * // Or use CSSFX for CSS hot reload
  * FxmlKit.setFxmlHotReloadEnabled(true);
- * FxmlKit.setCssHotReloadEnabled(false);  // Disable built-in CSS handling
- * CSSFX.start();                          // Use CSSFX instead
+ * FxmlKit.setCssHotReloadEnabled(false);
+ * CSSFX.start();
  * }</pre>
  *
  * <h3>What Can Be Hot-Reloaded</h3>
@@ -57,7 +58,7 @@ import java.util.logging.Logger;
  *
  * <h3>Tier 1: Zero-Configuration Mode (No DI)</h3>
  * <pre>{@code
- * // No configuration needed!
+ * // No configuration needed
  * MainView view = new MainView();
  * stage.setScene(new Scene(view));
  * }</pre>
@@ -69,7 +70,7 @@ import java.util.logging.Logger;
  * di.bindInstance(UserService.class, new UserService());
  * FxmlKit.setDiAdapter(di);
  *
- * MainView view = new MainView();  // Full DI support
+ * MainView view = new MainView();
  * }</pre>
  *
  * <h3>Tier 3: Isolated DI Mode (JPro Multi-User)</h3>
@@ -106,6 +107,10 @@ public final class FxmlKit {
 
     private static final List<String> SKIP_PACKAGE_PREFIXES = new ArrayList<>(DEFAULT_SKIP_PACKAGE_PREFIXES);
 
+    static {
+        configureDefaultLogging();
+    }
+
     private FxmlKit() {
     }
 
@@ -114,8 +119,7 @@ public final class FxmlKit {
     /**
      * Enables development mode with all hot reload features.
      *
-     * <p>This is a convenience method that enables both FXML and CSS hot reload.
-     * Equivalent to:
+     * <p>Equivalent to:
      * <pre>{@code
      * FxmlKit.setFxmlHotReloadEnabled(true);
      * FxmlKit.setCssHotReloadEnabled(true);
@@ -129,7 +133,6 @@ public final class FxmlKit {
      *         if (isDevelopmentMode()) {
      *             FxmlKit.enableDevelopmentMode();
      *         }
-     *         // ...
      *     }
      *
      *     private boolean isDevelopmentMode() {
@@ -148,10 +151,7 @@ public final class FxmlKit {
     }
 
     /**
-     * Disables development mode and releases all hot reload resources.
-     *
-     * <p>This is a convenience method that disables both FXML and CSS hot reload.
-     * Call this at application shutdown to release resources.
+     * Disables development mode and releases hot reload resources.
      *
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
@@ -166,20 +166,12 @@ public final class FxmlKit {
     /**
      * Enables or disables FXML hot reload.
      *
-     * <p>When enabled, FxmlKit monitors .fxml files for changes and automatically
-     * reloads affected views. This triggers a full view reload, which means all
-     * runtime state (user input, scroll position, etc.) will be lost.
+     * <p>When enabled, monitors .fxml files for changes and automatically reloads
+     * affected views. Full reload loses runtime state (user input, scroll position).
+     * Changes propagate through fx:include dependencies.
      *
-     * <p>FXML hot reload also handles fx:include dependencies - when a child FXML
-     * changes, all parent views that include it will also be reloaded.
-     *
-     * <h3>Technical Details</h3>
-     * <ul>
-     *   <li>Uses native file system WatchService for minimal CPU overhead</li>
-     *   <li>Monitors both source (src/main/resources) and target (target/classes) directories</li>
-     *   <li>Includes 500ms debouncing to prevent duplicate reloads</li>
-     *   <li>Automatically syncs source changes to target directory</li>
-     * </ul>
+     * <p>Uses WatchService for file monitoring with 500ms debouncing. Monitors both
+     * source and target directories, automatically syncing changes.
      *
      * @param enabled true to enable FXML hot reload, false to disable
      * @see #isFxmlHotReloadEnabled()
@@ -190,7 +182,7 @@ public final class FxmlKit {
     }
 
     /**
-     * Checks if FXML hot reload is currently enabled.
+     * Returns whether FXML hot reload is currently enabled.
      *
      * @return true if FXML hot reload is enabled
      * @see #setFxmlHotReloadEnabled(boolean)
@@ -204,21 +196,21 @@ public final class FxmlKit {
     /**
      * Enables or disables CSS/BSS hot reload.
      *
-     * <p>When enabled, FxmlKit monitors .css and .bss files for changes and
-     * refreshes stylesheets without a full view reload. This preserves all
-     * runtime state, making it ideal for rapid style iteration.
+     * <p>When enabled, monitors .css and .bss files for changes and refreshes
+     * stylesheets without full view reload. Preserves runtime state, making it
+     * suitable for rapid style iteration.
      *
      * <p>CSS hot reload only affects the FXML that directly uses the stylesheet
-     * (via same-name convention). It does not propagate to parent FXMLs that
+     * via same-name convention. Changes do not propagate to parent FXMLs that
      * include the affected view via fx:include.
      *
      * <h3>Using CSSFX Instead</h3>
      * <p>For advanced CSS scenarios (shared stylesheets, Scene-level styles),
-     * you can use CSSFX instead of the built-in CSS hot reload:
+     * disable the built-in CSS hot reload and use CSSFX:
      * <pre>{@code
      * FxmlKit.setFxmlHotReloadEnabled(true);
-     * FxmlKit.setCssHotReloadEnabled(false);  // Disable built-in CSS handling
-     * CSSFX.start();                          // Use CSSFX instead
+     * FxmlKit.setCssHotReloadEnabled(false);
+     * CSSFX.start();
      * }</pre>
      *
      * @param enabled true to enable CSS hot reload, false to disable
@@ -230,7 +222,7 @@ public final class FxmlKit {
     }
 
     /**
-     * Checks if CSS hot reload is currently enabled.
+     * Returns whether CSS hot reload is currently enabled.
      *
      * @return true if CSS hot reload is enabled
      * @see #setCssHotReloadEnabled(boolean)
@@ -244,22 +236,21 @@ public final class FxmlKit {
     /**
      * Sets the logging level for all FxmlKit components.
      *
+     * <p>This affects all loggers under the {@code com.dlsc.fxmlkit} package
+     * and their associated handlers.
+     *
+     * <p>Default level is {@link Level#WARNING}.
+     *
      * @param level the logging level (must not be null)
+     * @throws NullPointerException if level is null
      */
     public static void setLogLevel(Level level) {
         globalLogLevel = Objects.requireNonNull(level, "Log level cannot be null");
-
-        Logger rootLogger = Logger.getLogger(ROOT_PACKAGE_NAME);
-        rootLogger.setLevel(level);
-
-        Logger.getLogger(FxmlKitLoader.class.getName()).setLevel(level);
-        Logger.getLogger(FxmlViewProvider.class.getName()).setLevel(level);
-        Logger.getLogger(LiteDiAdapter.class.getName()).setLevel(level);
-        Logger.getLogger(HotReloadManager.class.getName()).setLevel(level);
+        applyLogLevel(level);
     }
 
     /**
-     * Gets the current global logging level.
+     * Returns the current global logging level.
      *
      * @return the current logging level
      */
@@ -279,7 +270,7 @@ public final class FxmlKit {
     }
 
     /**
-     * Gets the current global dependency injection adapter.
+     * Returns the current global dependency injection adapter.
      *
      * @return the current DI adapter, or null if none configured
      */
@@ -299,7 +290,7 @@ public final class FxmlKit {
     }
 
     /**
-     * Checks if automatic stylesheet attachment is enabled.
+     * Returns whether automatic stylesheet attachment is enabled.
      *
      * @return true if auto-attach is enabled
      */
@@ -313,13 +304,14 @@ public final class FxmlKit {
      * Sets the FXML node injection policy.
      *
      * @param policy the policy to use (must not be null)
+     * @throws NullPointerException if policy is null
      */
     public static void setFxmlInjectionPolicy(FxmlInjectionPolicy policy) {
         fxmlInjectionPolicy = Objects.requireNonNull(policy, "Policy cannot be null");
     }
 
     /**
-     * Gets the current FXML node injection policy.
+     * Returns the current FXML node injection policy.
      *
      * @return the current policy
      */
@@ -330,7 +322,7 @@ public final class FxmlKit {
     // ========== Package Prefix Configuration ==========
 
     /**
-     * Gets the list of package prefixes to skip during injection.
+     * Returns the list of package prefixes to skip during injection.
      *
      * @return mutable list of skip package prefixes
      */
@@ -341,7 +333,7 @@ public final class FxmlKit {
     // ========== Node Type Configuration ==========
 
     /**
-     * Gets the set of node types to exclude from injection.
+     * Returns the set of node types to exclude from injection.
      *
      * @return mutable thread-safe set of excluded node types
      */
@@ -350,7 +342,7 @@ public final class FxmlKit {
     }
 
     /**
-     * Gets the set of node types to include for injection.
+     * Returns the set of node types to include for injection.
      *
      * @return mutable thread-safe set of included node types
      */
@@ -373,5 +365,55 @@ public final class FxmlKit {
         SKIP_PACKAGE_PREFIXES.clear();
         SKIP_PACKAGE_PREFIXES.addAll(DEFAULT_SKIP_PACKAGE_PREFIXES);
         HotReloadManager.getInstance().reset();
+        applyLogLevel(Level.WARNING);
+    }
+
+    // ========== Internal Methods ==========
+
+    /**
+     * Configures default logging when FxmlKit class is loaded.
+     */
+    private static void configureDefaultLogging() {
+        try {
+            applyLogLevel(Level.WARNING);
+        } catch (Exception e) {
+            System.err.println("Warning: Failed to configure FxmlKit logging: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Applies the log level to FxmlKit loggers and their handlers.
+     */
+    private static void applyLogLevel(Level level) {
+        Logger rootLogger = Logger.getLogger(ROOT_PACKAGE_NAME);
+        rootLogger.setLevel(level);
+
+        configureHandlers(rootLogger, level);
+
+        if (rootLogger.getHandlers().length == 0 && rootLogger.getParent() != null) {
+            configureHandlers(rootLogger.getParent(), level);
+        }
+
+        configureComponentLogger(FxmlKitLoader.class, level);
+        configureComponentLogger(FxmlViewProvider.class, level);
+        configureComponentLogger(LiteDiAdapter.class, level);
+        configureComponentLogger(HotReloadManager.class, level);
+    }
+
+    /**
+     * Configures all handlers for a logger to use the specified level.
+     */
+    private static void configureHandlers(Logger logger, Level level) {
+        for (Handler handler : logger.getHandlers()) {
+            handler.setLevel(level);
+        }
+    }
+
+    /**
+     * Configures logger for a specific component class.
+     */
+    private static void configureComponentLogger(Class<?> componentClass, Level level) {
+        Logger logger = Logger.getLogger(componentClass.getName());
+        logger.setLevel(level);
     }
 }
