@@ -21,9 +21,18 @@ import java.util.logging.Logger;
  *   <tr><td>.fxml</td><td>FULL_RELOAD</td></tr>
  *   <tr><td>.properties</td><td>FULL_RELOAD</td></tr>
  *   <tr><td>.png, .jpg, .gif, .svg</td><td>FULL_RELOAD</td></tr>
- *   <tr><td>.css, .bss</td><td>STYLESHEET_RELOAD</td></tr>
+ *   <tr><td>.css, .bss</td><td>STYLESHEET_RELOAD (if enabled) or IGNORE</td></tr>
  *   <tr><td>.java, .class</td><td>IGNORE</td></tr>
  * </table>
+ *
+ * <h2>CSS Hot Reload Configuration</h2>
+ * <p>CSS hot reload is enabled by default. If you prefer to use CSSFX for CSS
+ * hot reload, you can disable FxmlKit's CSS handling:
+ * <pre>{@code
+ * // Use CSSFX instead
+ * ReloadStrategy.setCssReloadEnabled(false);
+ * CSSFX.start();
+ * }</pre>
  */
 public enum ReloadStrategy {
 
@@ -91,8 +100,10 @@ public enum ReloadStrategy {
         private void refreshStylesheets(Parent root) {
             // Create a copy of stylesheets to avoid concurrent modification
             var stylesheets = new java.util.ArrayList<>(root.getStylesheets());
-            root.getStylesheets().clear();
-            root.getStylesheets().addAll(stylesheets);
+            if (!stylesheets.isEmpty()) {
+                root.getStylesheets().clear();
+                root.getStylesheets().addAll(stylesheets);
+            }
 
             // Recursively refresh children
             for (var child : root.getChildrenUnmodifiable()) {
@@ -123,6 +134,12 @@ public enum ReloadStrategy {
     private static final Logger logger = Logger.getLogger(ReloadStrategy.class.getName());
 
     /**
+     * Whether CSS/BSS hot reload is enabled.
+     * Default is true. Set to false if using CSSFX or another CSS hot reload solution.
+     */
+    private static volatile boolean cssReloadEnabled = true;
+
+    /**
      * Applies this reload strategy to the given component.
      *
      * <p>Must be called from the JavaFX Application Thread.
@@ -130,6 +147,36 @@ public enum ReloadStrategy {
      * @param component the component to reload
      */
     public abstract void apply(HotReloadable component);
+
+    /**
+     * Enables or disables CSS/BSS hot reload.
+     *
+     * <p>When disabled, CSS/BSS file changes will be ignored by FxmlKit.
+     * This is useful when using an external CSS hot reload solution like CSSFX.
+     *
+     * <p>Example:
+     * <pre>{@code
+     * // Disable FxmlKit CSS reload, use CSSFX instead
+     * ReloadStrategy.setCssReloadEnabled(false);
+     * CSSFX.start();
+     * }</pre>
+     *
+     * @param enabled true to enable CSS hot reload (default), false to disable
+     */
+    public static void setCssReloadEnabled(boolean enabled) {
+        cssReloadEnabled = enabled;
+        logger.log(Level.INFO, "CSS hot reload {0}",
+                enabled ? "enabled" : "disabled (use CSSFX or similar for CSS hot reload)");
+    }
+
+    /**
+     * Returns whether CSS/BSS hot reload is enabled.
+     *
+     * @return true if CSS hot reload is enabled
+     */
+    public static boolean isCssReloadEnabled() {
+        return cssReloadEnabled;
+    }
 
     /**
      * Determines the appropriate reload strategy for a file extension.
@@ -150,7 +197,7 @@ public enum ReloadStrategy {
             case "fxml" -> FULL_RELOAD;
             case "properties" -> FULL_RELOAD;
             case "png", "jpg", "jpeg", "gif", "svg", "ico" -> FULL_RELOAD;
-            case "css", "bss" -> STYLESHEET_RELOAD;
+            case "css", "bss" -> cssReloadEnabled ? STYLESHEET_RELOAD : IGNORE;
             case "java", "class", "jar" -> IGNORE;
             default -> IGNORE;
         };

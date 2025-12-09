@@ -539,20 +539,26 @@ public final class HotReloadManager {
 
     /**
      * Finds all FXML paths that use the given stylesheet.
+     *
+     * <p>Unlike FXML dependency propagation, CSS changes do NOT propagate
+     * to parent FXMLs. CSS styles are local to the FXML that uses them.
+     *
+     * @param stylesheetPath the changed stylesheet path
+     * @return set of FXML paths that directly use this stylesheet
      */
     private Set<String> findFxmlsUsingStylesheet(String stylesheetPath) {
         Set<String> result = new LinkedHashSet<>();
 
-        // Direct mapping
+        // Direct mapping from stylesheet to FXML
         Set<String> directFxmls = stylesheetToFxml.get(stylesheetPath);
         if (directFxmls != null) {
             result.addAll(directFxmls);
         }
 
-        // Also check by base name (for auto-attached stylesheets)
-        // Hello.css -> Hello.fxml
-        String baseName = getBaseName(stylesheetPath);
-        if (baseName != null) {
+        // Fallback: check by base name if no mapping exists
+        // This handles cases where mapping wasn't built yet
+        if (result.isEmpty()) {
+            String baseName = getBaseName(stylesheetPath);
             String parentDir = getParentPath(stylesheetPath);
             String potentialFxml = (parentDir != null ? parentDir + "/" : "") + baseName + ".fxml";
 
@@ -561,13 +567,11 @@ public final class HotReloadManager {
             }
         }
 
-        // Propagate through dependency graph (if parent uses the stylesheet, children might too)
-        Set<String> expanded = new LinkedHashSet<>();
-        for (String fxmlPath : result) {
-            expanded.addAll(findAffectedPaths(fxmlPath));
-        }
+        // NOTE: We intentionally do NOT propagate to parent FXMLs here.
+        // CSS styles are local - changing Header.css should only affect
+        // HeaderView, not DashboardView that includes it via fx:include.
 
-        return expanded;
+        return result;
     }
 
     /**
