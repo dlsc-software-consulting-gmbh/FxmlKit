@@ -1,8 +1,10 @@
 package com.dlsc.fxmlkit.fxml;
 
+import com.dlsc.fxmlkit.core.DiAdapter;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
+import com.dlsc.fxmlkit.hotreload.HotReloadable;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
-import com.dlsc.fxmlkit.core.DiAdapter;
 
 import java.net.URL;
 import java.util.Optional;
@@ -16,9 +18,14 @@ import java.util.logging.Logger;
  * <p>This class provides a HAS-A relationship with the FXML view (returns Parent via getView()),
  * as opposed to FxmlView which IS-A JavaFX node.
  *
+ * <h2>Hot Reload Support</h2>
+ * <p>When hot reload is enabled via {@code FxmlKit.enableHotReload()}, providers
+ * automatically register themselves for file change monitoring. Changes to the
+ * FXML file will automatically trigger a view reload.
+ *
  * <h2>Three-Tier Model</h2>
  *
- * <h3>Tier 1 — Zero Configuration (No DI)</h3>
+ * <h3>Tier 1 - Zero Configuration (No DI)</h3>
  * <p>Minimal FXML loading without any DI framework.
  * <pre>{@code
  * public class MainViewProvider extends FxmlViewProvider<MainController> {}
@@ -35,7 +42,7 @@ import java.util.logging.Logger;
  *   <li>No field/method injection; no @PostInject; no @FxmlObject processing</li>
  * </ul>
  *
- * <h3>Tier 2 — Global DI (Single-User Desktop)</h3>
+ * <h3>Tier 2 - Global DI (Single-User Desktop)</h3>
  * <p>One-time DI adapter configuration; all views use the same adapter.
  * <pre>{@code
  * // One-time setup at application startup
@@ -55,7 +62,7 @@ import java.util.logging.Logger;
  *   <li>@FxmlObject node processing (policy-dependent)</li>
  * </ul>
  *
- * <h3>Tier 3 — Per-Instance DI (JPro Multi-User)</h3>
+ * <h3>Tier 3 - Per-Instance DI (JPro Multi-User)</h3>
  * <p>Each view instance carries an isolated {@link DiAdapter}.
  * <pre>{@code
  * // User-specific provider class with constructor injection
@@ -91,7 +98,7 @@ import java.util.logging.Logger;
  *
  * @param <T> the controller type
  */
-public abstract class FxmlViewProvider<T> {
+public abstract class FxmlViewProvider<T> implements HotReloadable {
 
     private static final Logger logger = Logger.getLogger(FxmlViewProvider.class.getName());
 
@@ -115,6 +122,21 @@ public abstract class FxmlViewProvider<T> {
      * Optional resource bundle for internationalization.
      */
     private ResourceBundle resources;
+
+    /**
+     * Whether this provider has been registered for hot reload.
+     */
+    private boolean registeredForHotReload = false;
+
+    /**
+     * Cached FXML URL for hot reload.
+     */
+    private URL cachedFxmlUrl;
+
+    /**
+     * Cached resource path for hot reload.
+     */
+    private String cachedResourcePath;
 
     /**
      * Constructs the provider using global DiAdapter (Tier 1/2).
@@ -219,8 +241,45 @@ public abstract class FxmlViewProvider<T> {
     }
 
     /**
-     * Reloads the view, discarding the cached instance.
+     * {@inheritDoc}
      */
+    @Override
+    public String getFxmlResourcePath() {
+        if (cachedResourcePath == null) {
+            URL url = getFxmlUrl();
+            cachedResourcePath = FxmlPathResolver.urlToResourcePath(url);
+        }
+        return cachedResourcePath;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public URL getFxmlUrl() {
+        if (cachedFxmlUrl == null) {
+            cachedFxmlUrl = FxmlPathResolver.resolveFxmlUrl(getClass());
+        }
+        return cachedFxmlUrl;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Returns the loaded view for stylesheet refresh operations.
+     * Returns null if the view has not been loaded yet.
+     */
+    @Override
+    public Parent getRootForStyleRefresh() {
+        return view;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reloads the view, discarding the cached instance.
+     */
+    @Override
     public void reload() {
         reload(null);
     }
@@ -231,6 +290,8 @@ public abstract class FxmlViewProvider<T> {
      * @param resources the new resource bundle, or null to keep current
      */
     public void reload(ResourceBundle resources) {
+        logger.log(Level.FINE, "Reloading FxmlViewProvider: {0}", getClass().getSimpleName());
+
         this.view = null;
         this.controller = null;
 
@@ -274,6 +335,9 @@ public abstract class FxmlViewProvider<T> {
 
         logger.log(Level.FINE, "View loaded successfully for: {0}", getClass().getName());
 
+        // Register for hot reload after successful load
+        registerForHotReload();
+
         // Hook for subclasses
         afterLoad();
     }
@@ -284,7 +348,7 @@ public abstract class FxmlViewProvider<T> {
     @SuppressWarnings("unchecked")
     private void loadWithoutDI() {
         try {
-            URL url = FxmlPathResolver.resolveFxmlUrl(getClass());
+            URL url = getFxmlUrl();
 
             FXMLLoader loader = FxmlKitLoader.createBasicLoader(url, getClass(), resources);
 
@@ -315,6 +379,17 @@ public abstract class FxmlViewProvider<T> {
 
         this.view = result.getView();
         this.controller = result.getController();
+    }
+
+    /**
+     * Registers this provider for hot reload if enabled.
+     */
+    private void registerForHotReload() {
+        if (!registeredForHotReload && HotReloadManager.getInstance().isEnabled()) {
+            HotReloadManager.getInstance().register(this);
+            registeredForHotReload = true;
+            logger.log(Level.FINE, "Registered for hot reload: {0}", getClass().getSimpleName());
+        }
     }
 
     /**

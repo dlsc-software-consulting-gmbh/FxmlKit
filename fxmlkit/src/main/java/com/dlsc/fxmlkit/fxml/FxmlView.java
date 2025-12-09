@@ -1,9 +1,11 @@
 package com.dlsc.fxmlkit.fxml;
 
+import com.dlsc.fxmlkit.core.DiAdapter;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
+import com.dlsc.fxmlkit.hotreload.HotReloadable;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.layout.StackPane;
-import com.dlsc.fxmlkit.core.DiAdapter;
 
 import java.net.URL;
 import java.util.Optional;
@@ -17,9 +19,14 @@ import java.util.logging.Logger;
  * <p>This class wraps FXML content in a StackPane, allowing views to be used
  * as direct JavaFX nodes while supporting the full three-tier DI model.
  *
+ * <h2>Hot Reload Support</h2>
+ * <p>When hot reload is enabled via {@code FxmlKit.enableHotReload()}, views
+ * automatically register themselves for file change monitoring. Changes to the
+ * FXML file will automatically trigger a view reload.
+ *
  * <h2>Three-Tier Support</h2>
  *
- * <h3>Tier 1 — Zero Configuration (No DI)</h3>
+ * <h3>Tier 1 - Zero Configuration (No DI)</h3>
  * <pre>{@code
  * public class MainView extends FxmlView<MainController> {}
  *
@@ -28,7 +35,7 @@ import java.util.logging.Logger;
  * stage.setScene(new Scene(view));  // Ready to use immediately
  * }</pre>
  *
- * <h3>Tier 2 — Global DI (Desktop)</h3>
+ * <h3>Tier 2 - Global DI (Desktop)</h3>
  * <pre>{@code
  * // One-time setup at application startup
  * LiteDiAdapter di = new LiteDiAdapter();
@@ -40,7 +47,7 @@ import java.util.logging.Logger;
  * stage.setScene(new Scene(view));  // Ready to use immediately
  * }</pre>
  *
- * <h3>Tier 3 — Isolated DI (JPro Multi-User)</h3>
+ * <h3>Tier 3 - Isolated DI (JPro Multi-User)</h3>
  * <pre>{@code
  * // User-specific view class with constructor injection
  * public class MainView extends FxmlView<MainController> {
@@ -73,7 +80,7 @@ import java.util.logging.Logger;
  *
  * @param <C> the controller type
  */
-public abstract class FxmlView<C> extends StackPane {
+public abstract class FxmlView<C> extends StackPane implements HotReloadable {
 
     private static final Logger logger = Logger.getLogger(FxmlView.class.getName());
 
@@ -97,6 +104,21 @@ public abstract class FxmlView<C> extends StackPane {
      * Optional resource bundle for internationalization.
      */
     private ResourceBundle resources;
+
+    /**
+     * Whether this view has been registered for hot reload.
+     */
+    private boolean registeredForHotReload = false;
+
+    /**
+     * Cached FXML URL for hot reload.
+     */
+    private URL cachedFxmlUrl;
+
+    /**
+     * Cached resource path for hot reload.
+     */
+    private String cachedResourcePath;
 
     /**
      * Constructs the view using global DiAdapter (Tier 1/2).
@@ -189,12 +211,36 @@ public abstract class FxmlView<C> extends StackPane {
     }
 
     /**
-     * Reloads the view, discarding the cached FXML and controller.
+     * {@inheritDoc}
+     */
+    @Override
+    public String getFxmlResourcePath() {
+        if (cachedResourcePath == null) {
+            URL url = getFxmlUrl();
+            cachedResourcePath = FxmlPathResolver.urlToResourcePath(url);
+        }
+        return cachedResourcePath;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public URL getFxmlUrl() {
+        if (cachedFxmlUrl == null) {
+            cachedFxmlUrl = FxmlPathResolver.resolveFxmlUrl(getClass());
+        }
+        return cachedFxmlUrl;
+    }
+
+    /**
+     * {@inheritDoc}
      *
-     * <p>After calling this method, the view will reload from FXML.
+     * <p>Reloads the view, discarding the cached FXML and controller.
      *
      * <p><b>Thread Safety:</b> Must be called from JavaFX Application Thread.
      */
+    @Override
     public void reload() {
         reload(null);
     }
@@ -205,6 +251,8 @@ public abstract class FxmlView<C> extends StackPane {
      * @param resources the new resource bundle, or null to keep current
      */
     public void reload(ResourceBundle resources) {
+        logger.log(Level.FINE, "Reloading FxmlView: {0}", getClass().getSimpleName());
+
         this.getChildren().clear();
         this.controller = null;
         this.loadedRoot = null;
@@ -235,7 +283,7 @@ public abstract class FxmlView<C> extends StackPane {
         // Hook for subclasses
         beforeLoad();
 
-        URL fxmlUrl = FxmlPathResolver.resolveFxmlUrl(getClass());
+        URL fxmlUrl = getFxmlUrl();
 
         try {
             if (diAdapter != null) {
@@ -273,12 +321,26 @@ public abstract class FxmlView<C> extends StackPane {
 
             logger.log(Level.FINE, "FxmlView loaded successfully: {0}", getClass().getName());
 
+            // Register for hot reload after successful load
+            registerForHotReload();
+
             // Hook for subclasses
             afterLoad();
 
         } catch (Exception e) {
             throw new RuntimeException(
                     "Failed to load FXML for " + getClass().getName() + " from URL: " + fxmlUrl, e);
+        }
+    }
+
+    /**
+     * Registers this view for hot reload if enabled.
+     */
+    private void registerForHotReload() {
+        if (!registeredForHotReload && HotReloadManager.getInstance().isEnabled()) {
+            HotReloadManager.getInstance().register(this);
+            registeredForHotReload = true;
+            logger.log(Level.FINE, "Registered for hot reload: {0}", getClass().getSimpleName());
         }
     }
 

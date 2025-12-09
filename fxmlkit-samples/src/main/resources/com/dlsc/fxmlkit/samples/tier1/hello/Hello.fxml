@@ -5,8 +5,10 @@
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
+<?import com.dlsc.components.AppleView?>
 <VBox alignment="CENTER" spacing="20"
       xmlns:fx="http://javafx.com/fxml"
+      stylesheets="@Hello.css"
       fx:controller="com.dlsc.fxmlkit.samples.tier1.hello.HelloController">
 
     <Label text="FxmlKit - Tier 1 Demo" styleClass="title-label"/>
@@ -15,5 +17,6 @@
     <HBox alignment="CENTER" spacing="10">
         <TextField fx:id="nameField" promptText="Enter your name"/>
         <Button text="Say Hello" onAction="#onSayHello"/>
+        <AppleView/>
     </HBox>
 </VBox>
