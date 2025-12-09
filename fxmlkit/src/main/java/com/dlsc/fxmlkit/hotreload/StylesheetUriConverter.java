@@ -79,6 +79,8 @@ public final class StylesheetUriConverter {
                     // Gradle
                     "/build/classes/java/main/",
                     "/build/classes/java/test/",
+                    "/build/classes/kotlin/main/",
+                    "/build/classes/kotlin/test/",
                     "/build/resources/main/",
                     "/build/resources/test/",
                     // IntelliJ IDEA
@@ -86,9 +88,12 @@ public final class StylesheetUriConverter {
                     "/out/production/resources/",
                     "/out/test/classes/",
                     "/out/test/resources/",
-                    // Generic (src paths - for source file URIs)
+                    // Source paths (for hot reload)
                     "/src/main/resources/",
-                    "/src/test/resources/"
+                    "/src/test/resources/",
+                    "/src/main/java/",
+                    "/src/test/java/",
+                    "/src/main/kotlin/"
             };
 
             for (String marker : markers) {
