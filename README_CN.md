@@ -135,6 +135,7 @@ public class StatusCard extends VBox {
 | 功能 | JavaFX 原生 | FxmlKit |
 |------|------------|---------|
 | 热更新（FXML + CSS） | ❌ 需要重启应用 | ✅ 即刻刷新 |
+| User Agent Stylesheet 热更新 | ❌ 无 | ✅ 支持三级（Application/Scene/SubScene） |
 | FXML 自动加载 | ❌ 手动编写加载代码 | ✅ 零配置自动加载 |
 | 样式表自动附加 | ❌ 手动代码附加 | ✅ 自动附加（含嵌套 FXML） |
 | 控制器依赖注入 | ⚠️ 需手动配置工厂 | ✅ 自动注入 |
@@ -372,6 +373,31 @@ public class MyApp extends Application {
 |----------|------|------------|
 | `.fxml` | 完整视图重载 | 丢失（用户输入、滚动位置） |
 | `.css` / `.bss` | 仅刷新样式表 | **保留** |
+
+**监控的样式表类型：**
+- 普通样式表（`scene.getStylesheets()`、`parent.getStylesheets()`）
+- User Agent Stylesheet（Application、Scene、SubScene 三级）
+
+### User Agent Stylesheet 支持
+
+对于 **Scene** 和 **SubScene** 级别的 User Agent Stylesheet，使用原生 JavaFX API 即可自动监控：
+
+```java
+scene.setUserAgentStylesheet("/styles/theme.css");  // 自动监控
+```
+
+对于 **Application** 级别，需使用 FxmlKit 的桥接属性以启用热更新：
+
+```java
+// ✅ 支持热更新 + 属性绑定
+FxmlKit.setApplicationUserAgentStylesheet("/styles/dark-theme.css");
+
+// 或绑定到主题选择器
+FxmlKit.applicationUserAgentStylesheetProperty()
+    .bind(themeComboBox.valueProperty());
+```
+
+注意：直接使用 `Application.setUserAgentStylesheet()` 仍然可以工作，但不会触发热更新。
 
 ### 精细控制
 
@@ -775,6 +801,7 @@ tier1/
 ├── i18n/           # 国际化示例
 ├── provider/       # FxmlViewProvider 使用示例
 └── viewpath/       # 自定义 FXML 路径
+└── theme/          # 应用层级的主题切换
 ```
 
 ### Tier 2 - 可选依赖注入

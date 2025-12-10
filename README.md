@@ -135,6 +135,7 @@ FXML usage:
 | Feature | Native JavaFX | FxmlKit |
 |---------|---------------|---------|
 | Hot Reload (FXML + CSS) | ❌ Restart required | ✅ Instant refresh |
+| User Agent Stylesheet Hot Reload | ❌ None | ✅ All three levels |
 | Automatic FXML Loading | ❌ Manual loading code | ✅ Zero-config auto-loading |
 | Automatic Stylesheet Attachment | ❌ Manual code required | ✅ Auto-attach (including nested FXML) |
 | Controller Dependency Injection | ⚠️ Manual factory setup | ✅ Automatic injection |
@@ -372,6 +373,31 @@ public class MyApp extends Application {
 |-----------|----------|---------------|
 | `.fxml` | Full view reload | Lost (user input, scroll position) |
 | `.css` / `.bss` | Stylesheet refresh only | **Preserved** |
+
+**Monitored Stylesheets:**
+- Normal stylesheets (`scene.getStylesheets()`, `parent.getStylesheets()`)
+- User Agent Stylesheets (Application, Scene, SubScene levels)
+
+### User Agent Stylesheet Support
+
+For **Scene** and **SubScene** level User Agent Stylesheets, hot reload works automatically with native JavaFX API:
+
+```java
+scene.setUserAgentStylesheet("/styles/theme.css");  // Auto-monitored
+```
+
+For **Application** level, use FxmlKit's bridged property to enable hot reload:
+
+```java
+// ✅ Supports hot reload + property binding
+FxmlKit.setApplicationUserAgentStylesheet("/styles/dark-theme.css");
+
+// Or bind to a theme selector
+FxmlKit.applicationUserAgentStylesheetProperty()
+    .bind(themeComboBox.valueProperty());
+```
+
+Note: Using `Application.setUserAgentStylesheet()` directly still works, but won't trigger hot reload.
 
 ### Fine-Grained Control
 
@@ -781,6 +807,7 @@ tier1/
 ├── i18n/           # Internationalization example
 ├── provider/       # FxmlViewProvider usage examples
 └── viewpath/       # Custom FXML path
+└── theme/          # Appliction level: User Agent Stylesheet hot reload
 ```
 
 ### Tier 2 - Optional Dependency Injection

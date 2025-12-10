@@ -1,0 +1,40 @@
+.root {
+    -fx-primary: #ff9800;
+    -fx-base: #2b2b2b;
+    -fx-background: #1e1e1e;
+    -fx-control-inner-background: #3c3c3c;
+    -fx-accent: -fx-primary;
+    -fx-focus-color: -fx-primary;
+}
+
+.content-pane {
+    -fx-background-color: -fx-background;
+}
+
+.label {
+    -fx-text-fill: #e0e0e0;
+    -fx-font-size: 14px;
+}
+
+.button {
+    -fx-background-color: -fx-primary;
+    -fx-text-fill: #1a1a1a;
+    -fx-padding: 8 16;
+    -fx-background-radius: 4;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #f57c00;
+}
+
+.title-label {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+}
+
+.info-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #999999;
+}

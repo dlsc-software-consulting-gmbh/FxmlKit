@@ -1,0 +1,37 @@
+
+.root {
+    -fx-primary: #0096c9;
+    -fx-base: #ececec;
+    -fx-background: #f4f4f4;
+    -fx-control-inner-background: #ffffff;
+    -fx-accent: -fx-primary;
+    -fx-focus-color: -fx-primary;
+}
+
+.label {
+    -fx-text-fill: #333333;
+    -fx-font-size: 14px;
+}
+
+.button {
+    -fx-background-color: -fx-primary;
+    -fx-text-fill: white;
+    -fx-padding: 8 16;
+    -fx-background-radius: 4;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: derive(#0096c9, -10%);
+}
+
+.title-label {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.info-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #666666;
+}
