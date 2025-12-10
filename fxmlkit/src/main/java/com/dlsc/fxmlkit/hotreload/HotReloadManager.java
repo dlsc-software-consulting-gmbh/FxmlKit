@@ -5,6 +5,7 @@ import javafx.application.Platform;
 import javafx.scene.Parent;
 
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.FileSystems;
@@ -147,10 +148,11 @@ public final class HotReloadManager {
 
     /**
      * Maps resource paths to their registered components.
+     * Uses WeakReference to allow components to be garbage collected.
      * Key: classpath-relative path (e.g., "com/example/View.fxml")
-     * Value: List of components using that FXML
+     * Value: List of weak references to components using that FXML
      */
-    private final Map<String, List<HotReloadable>> componentsByPath = new ConcurrentHashMap<>();
+    private final Map<String, List<WeakReference<HotReloadable>>> componentsByPath = new ConcurrentHashMap<>();
 
     /**
      * Reverse dependency graph: child FXML -> set of parent FXMLs.
@@ -287,7 +289,7 @@ public final class HotReloadManager {
      * Legacy method for enabling hot reload.
      *
      * @deprecated Use {@link #setFxmlHotReloadEnabled(boolean)} and
-     *             {@link #setCssHotReloadEnabled(boolean)} instead.
+     * {@link #setCssHotReloadEnabled(boolean)} instead.
      */
     @Deprecated
     public synchronized void enable() {
@@ -299,7 +301,7 @@ public final class HotReloadManager {
      * Legacy method for disabling hot reload.
      *
      * @deprecated Use {@link #setFxmlHotReloadEnabled(boolean)} and
-     *             {@link #setCssHotReloadEnabled(boolean)} instead.
+     * {@link #setCssHotReloadEnabled(boolean)} instead.
      */
     @Deprecated
     public synchronized void disable() {
@@ -330,9 +332,9 @@ public final class HotReloadManager {
             return;
         }
 
-        // Add to component registry
+        // Add to component registry with WeakReference
         componentsByPath.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
-                .add(component);
+                .add(new WeakReference<>(component));
 
         logger.log(Level.FINE, "Registered component: {0} -> {1}",
                 new Object[]{component.getClass().getSimpleName(), resourcePath});
@@ -811,16 +813,29 @@ public final class HotReloadManager {
     }
 
     /**
-     * Collects all components for the given paths.
+     * Collects all live components for the given paths.
+     *
+     * <p>Stale WeakReferences are not cleaned up during collection for simplicity.
+     * Memory impact is negligible, and
+     * {@link #reset()} clears all state when hot reload is disabled.
      */
     private Set<HotReloadable> collectComponents(Set<String> paths) {
         Set<HotReloadable> components = new LinkedHashSet<>();
+
         for (String path : paths) {
-            List<HotReloadable> list = componentsByPath.get(path);
-            if (list != null) {
-                components.addAll(list);
+            List<WeakReference<HotReloadable>> refs = componentsByPath.get(path);
+            if (refs == null) {
+                continue;
+            }
+
+            for (WeakReference<HotReloadable> ref : refs) {
+                HotReloadable component = ref.get();
+                if (component != null) {
+                    components.add(component);
+                }
             }
         }
+
         return components;
     }
 

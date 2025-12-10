@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,9 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Recognizes @Inject from javax.inject, jakarta.inject, and com.google.inject.
  *
- * <p>Limitations: no circular dependency support, no scope mechanism (all bindings are
- * singleton-style), no qualifier support (only type-based binding), method injection
- * idempotency depends on method design.
+ * <p>Limitations: no scope mechanism (all bindings are singleton-style), no qualifier
+ * support (only type-based binding), method injection idempotency depends on method design.
  *
  * <p>Desktop mode (Tier 2):
  * <pre>{@code
@@ -71,6 +71,12 @@ public class LiteDiAdapter extends BaseDiAdapter {
      * Uses identity-based comparison to ensure same object instance.
      */
     private final Set<Object> injectedObjects = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    /**
+     * Tracks types currently being created in each thread to detect circular dependencies.
+     * Uses LinkedHashSet to preserve insertion order for error messages.
+     */
+    private final ThreadLocal<Set<Class<?>>> creationStack = ThreadLocal.withInitial(LinkedHashSet::new);
 
     /**
      * Binds a specific instance to a type (singleton-style binding).
@@ -194,12 +200,22 @@ public class LiteDiAdapter extends BaseDiAdapter {
      * all constructor parameters via {@link #getInstance(Class)}, then invokes the
      * constructor to create the instance.
      *
+     * <p>Circular dependencies are detected and reported with a clear error message.
+     *
      * @param <T>  the type parameter
      * @param type the class to instantiate
      * @return the new instance (never null)
-     * @throws RuntimeException if creation fails
+     * @throws RuntimeException if creation fails or circular dependency detected
      */
     private <T> T createInstance(Class<T> type) {
+        Set<Class<?>> stack = creationStack.get();
+
+        // Check for circular dependency
+        if (!stack.add(type)) {
+            String cycle = formatCycle(stack, type);
+            throw new IllegalStateException("Circular dependency detected: " + cycle);
+        }
+
         try {
             Constructor<T> constructor = InjectionUtils.chooseConstructor(type);
             constructor.setAccessible(true);
@@ -214,9 +230,29 @@ public class LiteDiAdapter extends BaseDiAdapter {
             // Create instance
             return constructor.newInstance(args);
 
+        } catch (IllegalStateException e) {
+            // Re-throw circular dependency errors as-is
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to create instance of " + type.getName(), e);
+        } finally {
+            stack.remove(type);
+            if (stack.isEmpty()) {
+                creationStack.remove();
+            }
         }
+    }
+
+    /**
+     * Formats circular dependency chain for error message.
+     */
+    private String formatCycle(Set<Class<?>> stack, Class<?> type) {
+        StringBuilder sb = new StringBuilder();
+        for (Class<?> cls : stack) {
+            sb.append(cls.getSimpleName()).append(" -> ");
+        }
+        sb.append(type.getSimpleName());
+        return sb.toString();
     }
 
     /**
