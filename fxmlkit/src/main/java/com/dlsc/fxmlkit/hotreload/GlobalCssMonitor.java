@@ -587,7 +587,7 @@ public final class GlobalCssMonitor {
             }
 
             String currentUri = scene.getUserAgentStylesheet();
-            if (currentUri != null && StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
+            if (StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
                 if (sourceFileUri != null) {
                     scene.setUserAgentStylesheet(sourceFileUri);
                 } else {
@@ -620,7 +620,7 @@ public final class GlobalCssMonitor {
             }
 
             String currentUri = subScene.getUserAgentStylesheet();
-            if (currentUri != null && StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
+            if (StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
                 if (sourceFileUri != null) {
                     subScene.setUserAgentStylesheet(sourceFileUri);
                 } else {

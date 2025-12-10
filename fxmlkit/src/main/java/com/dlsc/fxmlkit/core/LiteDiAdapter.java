@@ -287,9 +287,4 @@ public class LiteDiAdapter extends BaseDiAdapter {
     public int getInjectedCount() {
         return injectedObjects.size();
     }
-
-    @Override
-    public String toString() {
-        return "LiteDiAdapter{instances=" + instances.size() + ", injected=" + injectedObjects.size() + "}";
-    }
 }
