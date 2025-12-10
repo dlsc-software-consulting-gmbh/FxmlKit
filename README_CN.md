@@ -399,19 +399,29 @@ FxmlKit.applicationUserAgentStylesheetProperty()
 
 注意：直接使用 `Application.setUserAgentStylesheet()` 仍然可以工作，但不会触发热更新。
 
-**自定义控件限制：** `Control.getUserAgentStylesheet()` 只有 getter 方法，没有对应的 setter。热更新无法在运行时刷新这些样式表。
+### 自定义控件 User Agent Stylesheet
 
-**开发阶段的解决方案：**
+FxmlKit 自动支持重写了 `getUserAgentStylesheet()` 的自定义控件的热更新：
 ```java
-// 开发阶段 - 支持热更新
-myControl.getStylesheets().add("my-control.css");
-
-// 发布时 - 使用 UA stylesheet
-@Override
-public String getUserAgentStylesheet() {
-    return getClass().getResource("my-control.css").toExternalForm();
+public class VersionLabel extends Label {
+    
+    @Override
+    public String getUserAgentStylesheet() {
+        return VersionLabel.class.getResource("version-label.css").toExternalForm();
+    }
 }
 ```
+
+**实现原理：** 在开发模式下，FxmlKit 自动检测重写了 `getUserAgentStylesheet()` 的自定义控件，并将样式表提升到 `getStylesheets().add(0, ...)`。这样既能启用热更新监控，又能保持预期的低优先级行为（索引 0 = 作者样式表中最低优先级）。
+
+**优先级说明：** 这种提升会轻微改变 CSS 优先级语义 —— 样式表从"用户代理样式表"变成了"作者样式表"。实际使用中这很少造成问题，因为：
+- 样式表添加在索引 0（最低优先级）
+- 仅在开发模式下生效
+- 生产环境使用原生 UA 样式表机制
+
+如果在开发过程中遇到样式冲突，有两种解决方案：
+- 提高自定义控件 CSS 中选择器的优先级
+- 临时移除 `getUserAgentStylesheet()` 重写，改为将样式表添加到 `getStylesheets()` 中。开发完成后再还原，恢复正确的 UA 样式表行为。
 
 ### 精细控制
 

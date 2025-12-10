@@ -399,19 +399,29 @@ FxmlKit.applicationUserAgentStylesheetProperty()
 
 Note: Using `Application.setUserAgentStylesheet()` directly still works, but won't trigger hot reload.
 
-**Custom Control Limitation:** `Control.getUserAgentStylesheet()` is a getter-only method with no corresponding setter. Hot reload cannot refresh these stylesheets at runtime.
+### Custom Control User Agent Stylesheet
 
-**Workaround for development:**
+FxmlKit automatically supports hot reload for custom controls that override `getUserAgentStylesheet()`:
 ```java
-// During development - supports hot reload
-myControl.getStylesheets().add("my-control.css");
-
-// For release - use UA stylesheet
-@Override
-public String getUserAgentStylesheet() {
-    return getClass().getResource("my-control.css").toExternalForm();
+public class VersionLabel extends Label {
+    
+    @Override
+    public String getUserAgentStylesheet() {
+        return VersionLabel.class.getResource("version-label.css").toExternalForm();
+    }
 }
 ```
+
+**How it works:** During development mode, FxmlKit automatically detects custom controls with overridden `getUserAgentStylesheet()` and promotes the stylesheet to `getStylesheets().add(0, ...)`. This enables hot reload monitoring while preserving the intended low-priority behavior (index 0 = lowest priority among author stylesheets).
+
+**Priority note:** This promotion slightly changes CSS specificity semantics — the stylesheet becomes an "author stylesheet" instead of a true "user agent stylesheet". In practice, this rarely causes issues since:
+- The stylesheet is added at index 0 (lowest priority)
+- This only affects development mode
+- Production builds use the native UA stylesheet mechanism
+
+If you encounter styling conflicts during development, you have two options:
+- Increase selector specificity in your custom control's CSS
+- Temporarily remove the `getUserAgentStylesheet()` override and add the stylesheet to `getStylesheets()` instead. Once development is complete, reverse this change to restore the proper UA stylesheet behavior.
 
 ### Fine-Grained Control
 
