@@ -135,7 +135,7 @@ public class StatusCard extends VBox {
 | 功能 | JavaFX 原生 | FxmlKit |
 |------|------------|---------|
 | 热更新（FXML + CSS） | ❌ 需要重启应用 | ✅ 即刻刷新 |
-| User Agent Stylesheet 热更新 | ❌ 无 | ✅ 支持三级（Application/Scene/SubScene） |
+| User Agent Stylesheet 热更新 | ❌ 无 | ✅ 全部级别（Application/Scene/SubScene/自定义控件） |
 | FXML 自动加载 | ❌ 手动编写加载代码 | ✅ 零配置自动加载 |
 | 样式表自动附加 | ❌ 手动代码附加 | ✅ 自动附加（含嵌套 FXML） |
 | 控制器依赖注入 | ⚠️ 需手动配置工厂 | ✅ 自动注入 |
@@ -377,6 +377,7 @@ public class MyApp extends Application {
 **监控的样式表类型：**
 - 普通样式表（`scene.getStylesheets()`、`parent.getStylesheets()`）
 - User Agent Stylesheet（Application、Scene、SubScene 三级）
+- 自定义控件样式表（`Region.getUserAgentStylesheet()` 重写）
 
 ### User Agent Stylesheet 支持
 
@@ -825,7 +826,7 @@ tier1/
 ├── i18n/           # 国际化示例
 ├── provider/       # FxmlViewProvider 使用示例
 └── viewpath/       # 自定义 FXML 路径
-└── theme/          # 应用层级的主题切换
+└── theme/          # User Agent Stylesheet 热更新（Application 级别 + 自定义控件）
 ```
 
 ### Tier 2 - 可选依赖注入

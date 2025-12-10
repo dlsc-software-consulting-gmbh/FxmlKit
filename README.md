@@ -135,7 +135,7 @@ FXML usage:
 | Feature | Native JavaFX | FxmlKit |
 |---------|---------------|---------|
 | Hot Reload (FXML + CSS) | ❌ Restart required | ✅ Instant refresh |
-| User Agent Stylesheet Hot Reload | ❌ None | ✅ All three levels |
+| User Agent Stylesheet Hot Reload | ❌ None | ✅ All levels (App/Scene/SubScene/Custom Control) |
 | Automatic FXML Loading | ❌ Manual loading code | ✅ Zero-config auto-loading |
 | Automatic Stylesheet Attachment | ❌ Manual code required | ✅ Auto-attach (including nested FXML) |
 | Controller Dependency Injection | ⚠️ Manual factory setup | ✅ Automatic injection |
@@ -377,6 +377,7 @@ public class MyApp extends Application {
 **Monitored Stylesheets:**
 - Normal stylesheets (`scene.getStylesheets()`, `parent.getStylesheets()`)
 - User Agent Stylesheets (Application, Scene, SubScene levels)
+- Custom control stylesheets (`Region.getUserAgentStylesheet()` overrides)
 
 ### User Agent Stylesheet Support
 
@@ -831,7 +832,7 @@ tier1/
 ├── i18n/           # Internationalization example
 ├── provider/       # FxmlViewProvider usage examples
 └── viewpath/       # Custom FXML path
-└── theme/          # Appliction level: User Agent Stylesheet hot reload
+└── theme/          # User Agent Stylesheet hot reload (Application level + Custom Control)
 ```
 
 ### Tier 2 - Optional Dependency Injection
