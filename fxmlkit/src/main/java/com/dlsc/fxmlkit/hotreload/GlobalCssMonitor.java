@@ -10,9 +10,11 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.SubScene;
+import javafx.scene.layout.Region;
 import javafx.stage.Window;
 
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -26,16 +28,22 @@ import java.util.logging.Logger;
 /**
  * Monitors all Scene stylesheets for CSS hot reload.
  *
- * <p>Tracks two categories of stylesheets:
+ * <p>Tracks multiple categories of stylesheets:
  * <ul>
  *   <li>Normal stylesheets - {@code scene.getStylesheets()}, {@code parent.getStylesheets()},
  *       {@code subScene.getStylesheets()}</li>
  *   <li>User Agent stylesheets - Application, Scene, and SubScene levels</li>
+ *   <li>Custom control stylesheets - {@code Region.getUserAgentStylesheet()} overrides
+ *       (development mode only, promoted to normal stylesheets for monitoring)</li>
  * </ul>
  *
  * <p>For Application-level User Agent Stylesheet, use the bridged property via
  * {@link #applicationUserAgentStylesheetProperty()} since {@link Application} only
  * provides static getter/setter without observable property support.
+ *
+ * <p>For custom controls that override {@code getUserAgentStylesheet()}, the stylesheet
+ * is automatically promoted to the control's {@code getStylesheets()} list (at index 0)
+ * during development mode to enable hot reload monitoring.
  *
  * @see HotReloadManager
  */
@@ -64,6 +72,17 @@ public final class GlobalCssMonitor {
      * Maps resource paths to SubScenes using them as UA stylesheet.
      */
     private final Map<String, List<WeakReference<SubScene>>> subSceneUAOwners = new ConcurrentHashMap<>();
+
+    /**
+     * Tracks Regions that have had their getUserAgentStylesheet() promoted.
+     * Uses WeakHashMap so Regions can be garbage collected.
+     */
+    private final Map<Region, String> promotedUserAgentStylesheets = new WeakHashMap<>();
+
+    /**
+     * Cache for checking if a class overrides getUserAgentStylesheet().
+     */
+    private final Map<Class<?>, Boolean> userAgentStylesheetOverrideCache = new ConcurrentHashMap<>();
 
     private volatile Path projectRoot;
 
@@ -239,6 +258,9 @@ public final class GlobalCssMonitor {
             stylesheetOwners.clear();
             sceneUAOwners.clear();
             subSceneUAOwners.clear();
+            synchronized (promotedUserAgentStylesheets) {
+                promotedUserAgentStylesheets.clear();
+            }
 
             logger.log(Level.FINE, "Global CSS monitoring stopped");
         });
@@ -430,6 +452,11 @@ public final class GlobalCssMonitor {
             });
         }
 
+        // Handle custom control getUserAgentStylesheet() for Regions
+        if (node instanceof Region region) {
+            promoteCustomUserAgentStylesheet(region);
+        }
+
         if (node instanceof Parent parent) {
             // Monitor this parent's stylesheets
             registerStylesheetList(parent.getStylesheets());
@@ -450,6 +477,84 @@ public final class GlobalCssMonitor {
                 }
             });
         }
+    }
+
+    /**
+     * Promotes a custom control's getUserAgentStylesheet() to its stylesheets list.
+     *
+     * <p>This enables hot reload for custom controls that override {@code getUserAgentStylesheet()}.
+     * The stylesheet is added at index 0 of the control's stylesheets list, allowing
+     * user-defined stylesheets (at higher indices) to override it.
+     *
+     * <p><b>Development mode only:</b> This slightly changes CSS priority semantics
+     * (UA becomes author-level), but enables hot reload which is more valuable during development.
+     *
+     * @param region the Region to check and promote
+     */
+    private void promoteCustomUserAgentStylesheet(Region region) {
+        // Skip if already promoted
+        synchronized (promotedUserAgentStylesheets) {
+            if (promotedUserAgentStylesheets.containsKey(region)) {
+                return;
+            }
+        }
+
+        // Check if this class overrides getUserAgentStylesheet()
+        if (!hasCustomUserAgentStylesheet(region.getClass())) {
+            return;
+        }
+
+        // Get the stylesheet URL
+        String uaStylesheet = region.getUserAgentStylesheet();
+        if (uaStylesheet == null || uaStylesheet.isEmpty()) {
+            return;
+        }
+
+        // Add to stylesheets at index 0 (lowest priority among author stylesheets)
+        ObservableList<String> stylesheets = region.getStylesheets();
+        if (!stylesheets.contains(uaStylesheet)) {
+            stylesheets.add(0, uaStylesheet);
+
+            synchronized (promotedUserAgentStylesheets) {
+                promotedUserAgentStylesheets.put(region, uaStylesheet);
+            }
+
+            logger.log(Level.FINE, "Promoted custom UA stylesheet for {0}: {1}",
+                    new Object[]{region.getClass().getSimpleName(), uaStylesheet});
+        }
+    }
+
+    /**
+     * Checks if a class has a custom (overridden) getUserAgentStylesheet() method.
+     *
+     * <p>Returns true if the method is declared in a class other than {@link Region}
+     * or its JavaFX superclasses.
+     *
+     * @param clazz the class to check
+     * @return true if getUserAgentStylesheet() is overridden
+     */
+    private boolean hasCustomUserAgentStylesheet(Class<?> clazz) {
+        return userAgentStylesheetOverrideCache.computeIfAbsent(clazz, c -> {
+            try {
+                Method method = c.getMethod("getUserAgentStylesheet");
+                Class<?> declaringClass = method.getDeclaringClass();
+
+                // Check if declared in a non-JavaFX class (i.e., custom control)
+                String packageName = declaringClass.getPackageName();
+                boolean isJavaFx = packageName.startsWith("javafx.")
+                        || packageName.startsWith("com.sun.javafx.");
+
+                if (!isJavaFx) {
+                    logger.log(Level.FINE, "Detected custom getUserAgentStylesheet() in: {0}",
+                            declaringClass.getName());
+                    return true;
+                }
+                return false;
+            } catch (NoSuchMethodException e) {
+                // Should not happen as Region always has this method
+                return false;
+            }
+        });
     }
 
     /**

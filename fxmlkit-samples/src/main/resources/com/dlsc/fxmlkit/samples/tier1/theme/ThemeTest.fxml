@@ -4,6 +4,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
+<?import com.dlsc.fxmlkit.samples.tier1.theme.VersionLabel?>
 <VBox xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.dlsc.fxmlkit.samples.tier1.theme.ThemeTestController"
       styleClass="content-pane">
@@ -19,5 +20,6 @@
     
     <Label text="Modify the CSS files while running to test hot reload!" 
            styleClass="info-label" wrapText="true"/>
-    
+
+    <VersionLabel/>
 </VBox>
