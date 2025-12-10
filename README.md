@@ -399,6 +399,20 @@ FxmlKit.applicationUserAgentStylesheetProperty()
 
 Note: Using `Application.setUserAgentStylesheet()` directly still works, but won't trigger hot reload.
 
+**Custom Control Limitation:** `Control.getUserAgentStylesheet()` is a getter-only method with no corresponding setter. Hot reload cannot refresh these stylesheets at runtime.
+
+**Workaround for development:**
+```java
+// During development - supports hot reload
+myControl.getStylesheets().add("my-control.css");
+
+// For release - use UA stylesheet
+@Override
+public String getUserAgentStylesheet() {
+    return getClass().getResource("my-control.css").toExternalForm();
+}
+```
+
 ### Fine-Grained Control
 
 ```java

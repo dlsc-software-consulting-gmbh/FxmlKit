@@ -399,6 +399,20 @@ FxmlKit.applicationUserAgentStylesheetProperty()
 
 注意：直接使用 `Application.setUserAgentStylesheet()` 仍然可以工作，但不会触发热更新。
 
+**自定义控件限制：** `Control.getUserAgentStylesheet()` 只有 getter 方法，没有对应的 setter。热更新无法在运行时刷新这些样式表。
+
+**开发阶段的解决方案：**
+```java
+// 开发阶段 - 支持热更新
+myControl.getStylesheets().add("my-control.css");
+
+// 发布时 - 使用 UA stylesheet
+@Override
+public String getUserAgentStylesheet() {
+    return getClass().getResource("my-control.css").toExternalForm();
+}
+```
+
 ### 精细控制
 
 ```java
