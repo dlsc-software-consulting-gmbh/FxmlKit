@@ -16,13 +16,13 @@ import javafx.stage.Window;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -360,7 +360,7 @@ public final class GlobalCssMonitor {
     private void registerSceneUserAgentStylesheet(String uri, Scene scene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            sceneUAOwners.computeIfAbsent(resourcePath, k -> new ArrayList<>())
+            sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
                     .add(new WeakReference<>(scene));
             logger.log(Level.FINE, "Registered Scene UA stylesheet: {0}", resourcePath);
         }
@@ -400,7 +400,7 @@ public final class GlobalCssMonitor {
     private void registerSubSceneUserAgentStylesheet(String uri, SubScene subScene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            subSceneUAOwners.computeIfAbsent(resourcePath, k -> new ArrayList<>())
+            subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
                     .add(new WeakReference<>(subScene));
             logger.log(Level.FINE, "Registered SubScene UA stylesheet: {0}", resourcePath);
         }
@@ -585,7 +585,7 @@ public final class GlobalCssMonitor {
             return;
         }
 
-        stylesheetOwners.computeIfAbsent(resourcePath, k -> new ArrayList<>())
+        stylesheetOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
                 .add(new WeakReference<>(owner));
 
         logger.log(Level.FINE, "Registered stylesheet: {0}", resourcePath);
