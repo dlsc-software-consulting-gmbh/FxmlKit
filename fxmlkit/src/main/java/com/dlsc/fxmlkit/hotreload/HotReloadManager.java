@@ -273,30 +273,6 @@ public final class HotReloadManager {
     }
 
     /**
-     * Legacy method for enabling hot reload.
-     *
-     * @deprecated Use {@link #setFxmlHotReloadEnabled(boolean)} and
-     * {@link #setCssHotReloadEnabled(boolean)} instead.
-     */
-    @Deprecated
-    public synchronized void enable() {
-        setFxmlHotReloadEnabled(true);
-        setCssHotReloadEnabled(true);
-    }
-
-    /**
-     * Legacy method for disabling hot reload.
-     *
-     * @deprecated Use {@link #setFxmlHotReloadEnabled(boolean)} and
-     * {@link #setCssHotReloadEnabled(boolean)} instead.
-     */
-    @Deprecated
-    public synchronized void disable() {
-        setFxmlHotReloadEnabled(false);
-        setCssHotReloadEnabled(false);
-    }
-
-    /**
      * Registers a component for hot reload monitoring.
      *
      * <p>When registered, the component's FXML file location is analyzed to determine

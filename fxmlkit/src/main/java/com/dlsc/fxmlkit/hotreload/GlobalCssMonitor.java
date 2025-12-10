@@ -16,12 +16,13 @@ import javafx.stage.Window;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -60,18 +61,19 @@ public final class GlobalCssMonitor {
 
     /**
      * Resource path of the current Application UA stylesheet.
+     * Volatile: read by WatchService thread in refreshStylesheet().
      */
     private volatile String applicationUAResourcePath;
 
     /**
      * Maps resource paths to Scenes using them as UA stylesheet.
      */
-    private final Map<String, List<WeakReference<Scene>>> sceneUAOwners = new ConcurrentHashMap<>();
+    private final Map<String, List<WeakReference<Scene>>> sceneUAOwners = new HashMap<>();
 
     /**
      * Maps resource paths to SubScenes using them as UA stylesheet.
      */
-    private final Map<String, List<WeakReference<SubScene>>> subSceneUAOwners = new ConcurrentHashMap<>();
+    private final Map<String, List<WeakReference<SubScene>>> subSceneUAOwners = new HashMap<>();
 
     /**
      * Tracks Regions that have had their getUserAgentStylesheet() promoted.
@@ -82,12 +84,16 @@ public final class GlobalCssMonitor {
     /**
      * Cache for checking if a class overrides getUserAgentStylesheet().
      */
-    private final Map<Class<?>, Boolean> userAgentStylesheetOverrideCache = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Boolean> userAgentStylesheetOverrideCache = new HashMap<>();
 
+    /**
+     * Volatile: read by WatchService thread in refreshStylesheet().
+     */
     private volatile Path projectRoot;
 
     /**
      * Whether monitoring is active.
+     * Volatile: read by WatchService thread in refreshStylesheet().
      */
     private volatile boolean monitoring = false;
 
@@ -104,13 +110,12 @@ public final class GlobalCssMonitor {
     /**
      * Tracks stylesheet lists that already have listeners.
      */
-    private final Set<ObservableList<String>> listenedStylesheets = ConcurrentHashMap.newKeySet();
+    private final Set<ObservableList<String>> listenedStylesheets = new HashSet<>();
 
     /**
      * Maps resource paths to their stylesheet list owners.
      */
-    private final Map<String, List<WeakReference<ObservableList<String>>>> stylesheetOwners =
-            new ConcurrentHashMap<>();
+    private final Map<String, List<WeakReference<ObservableList<String>>>> stylesheetOwners = new HashMap<>();
 
     /**
      * Listener for window list changes.
@@ -248,19 +253,13 @@ public final class GlobalCssMonitor {
                 windowListListener = null;
             }
 
-            synchronized (monitoredScenes) {
-                monitoredScenes.clear();
-            }
-            synchronized (monitoredNodes) {
-                monitoredNodes.clear();
-            }
+            monitoredScenes.clear();
+            monitoredNodes.clear();
             listenedStylesheets.clear();
             stylesheetOwners.clear();
             sceneUAOwners.clear();
             subSceneUAOwners.clear();
-            synchronized (promotedUserAgentStylesheets) {
-                promotedUserAgentStylesheets.clear();
-            }
+            promotedUserAgentStylesheets.clear();
 
             logger.log(Level.FINE, "Global CSS monitoring stopped");
         });
@@ -281,9 +280,7 @@ public final class GlobalCssMonitor {
      * @return scene count
      */
     public int getMonitoredSceneCount() {
-        synchronized (monitoredScenes) {
-            return monitoredScenes.size();
-        }
+        return monitoredScenes.size();
     }
 
     /**
@@ -314,12 +311,10 @@ public final class GlobalCssMonitor {
      * Monitors a scene for stylesheet changes.
      */
     private void monitorScene(Scene scene) {
-        synchronized (monitoredScenes) {
-            if (monitoredScenes.containsKey(scene)) {
-                return;
-            }
-            monitoredScenes.put(scene, Boolean.TRUE);
+        if (monitoredScenes.containsKey(scene)) {
+            return;
         }
+        monitoredScenes.put(scene, Boolean.TRUE);
 
         // Monitor scene normal stylesheets
         registerStylesheetList(scene.getStylesheets());
@@ -365,7 +360,7 @@ public final class GlobalCssMonitor {
     private void registerSceneUserAgentStylesheet(String uri, Scene scene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
+            sceneUAOwners.computeIfAbsent(resourcePath, k -> new ArrayList<>())
                     .add(new WeakReference<>(scene));
             logger.log(Level.FINE, "Registered Scene UA stylesheet: {0}", resourcePath);
         }
@@ -405,7 +400,7 @@ public final class GlobalCssMonitor {
     private void registerSubSceneUserAgentStylesheet(String uri, SubScene subScene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
+            subSceneUAOwners.computeIfAbsent(resourcePath, k -> new ArrayList<>())
                     .add(new WeakReference<>(subScene));
             logger.log(Level.FINE, "Registered SubScene UA stylesheet: {0}", resourcePath);
         }
@@ -424,17 +419,18 @@ public final class GlobalCssMonitor {
         }
     }
 
+    /**
+     * Recursively monitors a node and its children for stylesheet changes.
+     */
     private void monitorNodeRecursively(Node node) {
         if (node == null) {
             return;
         }
 
-        synchronized (monitoredNodes) {
-            if (monitoredNodes.containsKey(node)) {
-                return;
-            }
-            monitoredNodes.put(node, Boolean.TRUE);
+        if (monitoredNodes.containsKey(node)) {
+            return;
         }
+        monitoredNodes.put(node, Boolean.TRUE);
 
         // SubScene has its own UA stylesheet (not a Parent subclass, no getStylesheets())
         if (node instanceof SubScene subScene) {
@@ -492,11 +488,8 @@ public final class GlobalCssMonitor {
      * @param region the Region to check and promote
      */
     private void promoteCustomUserAgentStylesheet(Region region) {
-        // Skip if already promoted
-        synchronized (promotedUserAgentStylesheets) {
-            if (promotedUserAgentStylesheets.containsKey(region)) {
-                return;
-            }
+        if (promotedUserAgentStylesheets.containsKey(region)) {
+            return;
         }
 
         // Check if this class overrides getUserAgentStylesheet()
@@ -514,10 +507,7 @@ public final class GlobalCssMonitor {
         ObservableList<String> stylesheets = region.getStylesheets();
         if (!stylesheets.contains(uaStylesheet)) {
             stylesheets.add(0, uaStylesheet);
-
-            synchronized (promotedUserAgentStylesheets) {
-                promotedUserAgentStylesheets.put(region, uaStylesheet);
-            }
+            promotedUserAgentStylesheets.put(region, uaStylesheet);
 
             logger.log(Level.FINE, "Promoted custom UA stylesheet for {0}: {1}",
                     new Object[]{region.getClass().getSimpleName(), uaStylesheet});
@@ -595,7 +585,7 @@ public final class GlobalCssMonitor {
             return;
         }
 
-        stylesheetOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
+        stylesheetOwners.computeIfAbsent(resourcePath, k -> new ArrayList<>())
                 .add(new WeakReference<>(owner));
 
         logger.log(Level.FINE, "Registered stylesheet: {0}", resourcePath);
@@ -613,8 +603,9 @@ public final class GlobalCssMonitor {
 
         // Find source file URI (for bypassing cache)
         String sourceFileUri = null;
-        if (projectRoot != null) {
-            Path sourceFile = StylesheetUriConverter.findSourceFile(resourcePath, projectRoot);
+        Path root = projectRoot;  // volatile read
+        if (root != null) {
+            Path sourceFile = StylesheetUriConverter.findSourceFile(resourcePath, root);
             if (sourceFile != null) {
                 sourceFileUri = sourceFile.toUri().toString();
             }

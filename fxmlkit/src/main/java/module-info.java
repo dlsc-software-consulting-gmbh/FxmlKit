@@ -8,6 +8,5 @@ open module com.dlsc.fxmlkit {
     exports com.dlsc.fxmlkit.annotations;
     exports com.dlsc.fxmlkit.core;
     exports com.dlsc.fxmlkit.fxml;
-    exports com.dlsc.fxmlkit.hotreload;
     exports com.dlsc.fxmlkit.policy;
 }
