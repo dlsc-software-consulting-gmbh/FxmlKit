@@ -37,7 +37,7 @@ import java.util.logging.Logger;
  * <p>This singleton class coordinates file monitoring, dependency tracking, and view reloading
  * during development. It provides zero-configuration hot reload support for FxmlKit views.
  *
- * <h2>Features</h2>
+ * <p>Features:
  * <ul>
  *   <li>Automatic file change detection via WatchService</li>
  *   <li>Dual directory monitoring (source and target/classes)</li>
@@ -48,16 +48,15 @@ import java.util.logging.Logger;
  *   <li>Support for multi-module Maven/Gradle projects</li>
  * </ul>
  *
- * <h2>Supported File Types</h2>
- * <table border="1">
- *   <tr><th>Extension</th><th>Behavior</th><th>Notes</th></tr>
- *   <tr><td>.fxml</td><td>Full reload</td><td>Loses runtime state</td></tr>
- *   <tr><td>.css, .bss</td><td>Stylesheet refresh</td><td>Preserves runtime state</td></tr>
- *   <tr><td>.properties</td><td>Ignored</td><td>Java ResourceBundle caching limitation</td></tr>
- *   <tr><td>.png, .jpg, etc.</td><td>Ignored</td><td>JavaFX Image caching limitation</td></tr>
- * </table>
+ * <p>Supported file types:
+ * <ul>
+ *   <li>.fxml - Full reload (loses runtime state)</li>
+ *   <li>.css, .bss - Stylesheet refresh (preserves runtime state)</li>
+ *   <li>.properties - Ignored (Java ResourceBundle caching limitation)</li>
+ *   <li>.png, .jpg, etc. - Ignored (JavaFX Image caching limitation)</li>
+ * </ul>
  *
- * <h2>Usage</h2>
+ * <p>Usage:
  * <pre>{@code
  * // Enable hot reload at application startup
  * if (isDevelopmentMode()) {
@@ -71,27 +70,21 @@ import java.util.logging.Logger;
  * FxmlKit.disableDevelopmentMode();
  * }</pre>
  *
- * <h2>Architecture</h2>
+ * <p>Architecture:
  * <pre>
  * File Change (src or target)
- *     |
- *     v
+ *     ↓
  * WatchService Thread
- *     |
- *     v
+ *     ↓
  * Debounce Check (300ms window)
- *     |
- *     v
+ *     ↓
  * Dependency Analysis (BFS for fx:include / CSS mapping)
- *     |
- *     v
+ *     ↓
  * Platform.runLater()
- *     |
- *     v
+ *     ↓
  * Component.reload() on JavaFX Thread
  * </pre>
  *
- * <h2>Thread Safety</h2>
  * <p>All public methods are thread-safe. Internal state is protected by
  * ConcurrentHashMap and synchronized blocks where necessary.
  *
@@ -203,8 +196,6 @@ public final class HotReloadManager {
         return globalCssMonitor;
     }
 
-    // ========== FXML Hot Reload Control ==========
-
     /**
      * Enables or disables FXML hot reload.
      *
@@ -236,8 +227,6 @@ public final class HotReloadManager {
     public boolean isFxmlHotReloadEnabled() {
         return fxmlHotReloadEnabled;
     }
-
-    // ========== CSS Hot Reload Control ==========
 
     /**
      * Enables or disables CSS hot reload.
@@ -274,8 +263,6 @@ public final class HotReloadManager {
         return cssHotReloadEnabled;
     }
 
-    // ========== Convenience Methods ==========
-
     /**
      * Returns whether any hot reload feature is enabled.
      *
@@ -308,8 +295,6 @@ public final class HotReloadManager {
         setFxmlHotReloadEnabled(false);
         setCssHotReloadEnabled(false);
     }
-
-    // ========== Component Registration ==========
 
     /**
      * Registers a component for hot reload monitoring.
@@ -348,8 +333,6 @@ public final class HotReloadManager {
         // Initialize monitoring if needed
         initializeMonitoringFromComponent(component);
     }
-
-    // ========== Internal: WatchService Management ==========
 
     /**
      * Updates the WatchService state based on current configuration.
@@ -627,8 +610,6 @@ public final class HotReloadManager {
 
         logger.log(Level.FINE, "Watch thread stopped");
     }
-
-    // ========== File Change Processing ==========
 
     /**
      * Processes a file change event.
@@ -952,8 +933,6 @@ public final class HotReloadManager {
 
         return result;
     }
-
-    // ========== Utility Methods ==========
 
     /**
      * Converts a URI to a classpath-relative resource path.

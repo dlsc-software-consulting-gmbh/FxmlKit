@@ -6,6 +6,7 @@ import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.GlobalCssMonitor;
 import com.dlsc.fxmlkit.hotreload.StylesheetUriConverter;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
+import javafx.beans.property.StringProperty;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,10 +20,8 @@ import java.util.logging.Logger;
 /**
  * Central configuration facade for FxmlKit framework.
  *
- * <p>Provides global configuration for the three-tier progressive design of FxmlKit.
- *
- * <p>Hot reload can be enabled via {@code enableDevelopmentMode()} or controlled
- * independently via {@code setFxmlHotReloadEnabled} and {@code setCssHotReloadEnabled}.
+ * <p>Provides global configuration for dependency injection, hot reload,
+ * and stylesheet management.
  *
  * @see FxmlKitLoader
  * @see FxmlViewProvider
@@ -59,13 +58,10 @@ public final class FxmlKit {
     private FxmlKit() {
     }
 
-    // ========== Development Mode ==========
-
     /**
      * Enables development mode with FXML and CSS hot reload.
      *
-     * <p>Equivalent to calling {@code setFxmlHotReloadEnabled(true)} and
-     * {@code setCssHotReloadEnabled(true)}.
+     * <p>CSS hot reload covers all stylesheet types including User Agent Stylesheets.
      *
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
@@ -77,9 +73,6 @@ public final class FxmlKit {
 
     /**
      * Disables development mode and releases hot reload resources.
-     *
-     * @see #setFxmlHotReloadEnabled(boolean)
-     * @see #setCssHotReloadEnabled(boolean)
      */
     public static void disableDevelopmentMode() {
         setFxmlHotReloadEnabled(false);
@@ -89,75 +82,89 @@ public final class FxmlKit {
     /**
      * Enables or disables FXML hot reload.
      *
-     * <p>When enabled, monitors .fxml files for changes and automatically reloads
-     * affected views. Full reload loses runtime state (user input, scroll position).
-     * Changes propagate through fx:include dependencies.
-     *
-     * <p>Uses WatchService for file monitoring with 300ms debouncing. Monitors both
-     * source and target directories, automatically syncing changes.
-     *
-     * @param enabled true to enable FXML hot reload, false to disable
-     * @see #isFxmlHotReloadEnabled()
-     * @see #setCssHotReloadEnabled(boolean)
+     * @param enabled true to enable, false to disable
      */
     public static void setFxmlHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setFxmlHotReloadEnabled(enabled);
     }
 
     /**
-     * Returns whether FXML hot reload is currently enabled.
+     * Returns whether FXML hot reload is enabled.
      *
-     * @return true if FXML hot reload is enabled
-     * @see #setFxmlHotReloadEnabled(boolean)
+     * @return true if enabled
      */
     public static boolean isFxmlHotReloadEnabled() {
         return HotReloadManager.getInstance().isFxmlHotReloadEnabled();
     }
 
-    // ========== CSS Hot Reload ==========
-
     /**
-     * Enables or disables CSS/BSS hot reload.
+     * Enables or disables CSS hot reload.
      *
-     * <p>When enabled, monitors .css and .bss files for changes and refreshes
-     * stylesheets without full view reload. Runtime state is preserved.
-     *
-     * <p>Monitors all stylesheets across the scene graph:
+     * <p>When enabled, monitors all stylesheets for changes:
      * <ul>
-     *   <li>Scene-level stylesheets</li>
-     *   <li>All Parent node stylesheets</li>
-     *   <li>Dynamically added stylesheets</li>
-     *   <li>Stylesheets matching FXML names (e.g., UserView.fxml → UserView.css)</li>
+     *   <li>Scene and Parent stylesheets</li>
+     *   <li>User Agent Stylesheets (Application, Scene, SubScene)</li>
      * </ul>
      *
-     * @param enabled true to enable CSS hot reload, false to disable
-     * @see #isCssHotReloadEnabled()
+     * @param enabled true to enable, false to disable
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setCssHotReloadEnabled(enabled);
     }
 
     /**
-     * Returns whether CSS hot reload is currently enabled.
+     * Returns whether CSS hot reload is enabled.
      *
-     * @return true if CSS hot reload is enabled
-     * @see #setCssHotReloadEnabled(boolean)
+     * @return true if enabled
      */
     public static boolean isCssHotReloadEnabled() {
         return HotReloadManager.getInstance().isCssHotReloadEnabled();
     }
 
-    // ========== Logging Configuration ==========
+    /**
+     * Returns the Application-level User Agent Stylesheet property.
+     *
+     * <p>Use this instead of {@link javafx.application.Application#setUserAgentStylesheet(String)}
+     * to enable CSS hot reload and reactive binding.
+     *
+     * <pre>{@code
+     * // Direct setting
+     * FxmlKit.setApplicationUserAgentStylesheet("/styles/dark.css");
+     *
+     * // Bind to theme selector
+     * FxmlKit.applicationUserAgentStylesheetProperty()
+     *     .bind(themeComboBox.valueProperty());
+     * }</pre>
+     *
+     * @return the Application UA stylesheet property
+     */
+    public static StringProperty applicationUserAgentStylesheetProperty() {
+        return HotReloadManager.getInstance().getGlobalCssMonitor().applicationUserAgentStylesheetProperty();
+    }
+
+    /**
+     * Sets the Application-level User Agent Stylesheet.
+     *
+     * @param url the stylesheet URL, or null to clear
+     * @see #applicationUserAgentStylesheetProperty()
+     */
+    public static void setApplicationUserAgentStylesheet(String url) {
+        applicationUserAgentStylesheetProperty().set(url);
+    }
+
+    /**
+     * Returns the current Application-level User Agent Stylesheet.
+     *
+     * @return the current stylesheet URL, or null if not set
+     */
+    public static String getApplicationUserAgentStylesheet() {
+        return applicationUserAgentStylesheetProperty().get();
+    }
 
     /**
      * Sets the logging level for all FxmlKit components.
      *
-     * <p>This affects all loggers under the {@code com.dlsc.fxmlkit} package
-     * and their associated handlers.
-     *
-     * <p>Default level is {@link Level#WARNING}.
-     *
-     * @param level the logging level (must not be null)
+     * @param level the logging level
      * @throws NullPointerException if level is null
      */
     public static void setLogLevel(Level level) {
@@ -174,19 +181,17 @@ public final class FxmlKit {
         return globalLogLevel;
     }
 
-    // ========== Dependency Injection Configuration ==========
-
     /**
      * Sets the global dependency injection adapter.
      *
-     * @param adapter the DI adapter to use, or null for zero-config mode
+     * @param adapter the DI adapter, or null for zero-config mode
      */
     public static void setDiAdapter(DiAdapter adapter) {
         globalDiAdapter = adapter;
     }
 
     /**
-     * Returns the current global dependency injection adapter.
+     * Returns the current global DI adapter.
      *
      * @return the current DI adapter, or null if none configured
      */
@@ -194,12 +199,10 @@ public final class FxmlKit {
         return globalDiAdapter;
     }
 
-    // ========== Stylesheet Configuration ==========
-
     /**
      * Sets whether stylesheets should be automatically attached.
      *
-     * @param enabled true to enable auto-attach, false to disable
+     * @param enabled true to enable auto-attach
      */
     public static void setAutoAttachStyles(boolean enabled) {
         autoAttachStyles = enabled;
@@ -214,12 +217,10 @@ public final class FxmlKit {
         return autoAttachStyles;
     }
 
-    // ========== Injection Policy Configuration ==========
-
     /**
      * Sets the FXML node injection policy.
      *
-     * @param policy the policy to use (must not be null)
+     * @param policy the policy
      * @throws NullPointerException if policy is null
      */
     public static void setFxmlInjectionPolicy(FxmlInjectionPolicy policy) {
@@ -235,8 +236,6 @@ public final class FxmlKit {
         return fxmlInjectionPolicy;
     }
 
-    // ========== Package Prefix Configuration ==========
-
     /**
      * Returns the list of package prefixes to skip during injection.
      *
@@ -246,12 +245,10 @@ public final class FxmlKit {
         return SKIP_PACKAGE_PREFIXES;
     }
 
-    // ========== Node Type Configuration ==========
-
     /**
      * Returns the set of node types to exclude from injection.
      *
-     * @return mutable thread-safe set of excluded node types
+     * @return mutable set of excluded node types
      */
     public static Set<Class<?>> getExcludeNodeTypes() {
         return EXCLUDE_NODE_TYPES;
@@ -260,13 +257,11 @@ public final class FxmlKit {
     /**
      * Returns the set of node types to include for injection.
      *
-     * @return mutable thread-safe set of included node types
+     * @return mutable set of included node types
      */
     public static Set<Class<?>> getIncludeNodeTypes() {
         return INCLUDE_NODE_TYPES;
     }
-
-    // ========== Reset Configuration ==========
 
     /**
      * Resets all FxmlKit configuration to defaults.
@@ -283,8 +278,6 @@ public final class FxmlKit {
         HotReloadManager.getInstance().reset();
         applyLogLevel(Level.WARNING);
     }
-
-    // ========== Internal Methods ==========
 
     /**
      * Configures default logging when FxmlKit class is loaded.
