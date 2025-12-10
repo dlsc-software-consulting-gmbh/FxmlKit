@@ -519,4 +519,46 @@ public final class FxmlPathResolver {
         }
         return name;
     }
+
+    /**
+     * Converts a URL to a classpath-relative resource path.
+     */
+    public static String urlToResourcePath(URL url) {
+        if (url == null) {
+            return null;
+        }
+
+        String path = url.getPath();
+
+        // Handle JAR URLs
+        int bangIndex = path.indexOf("!/");
+        if (bangIndex >= 0) {
+            path = path.substring(bangIndex + 2);
+        }
+
+        // Remove /classes/ prefix (Maven target/classes)
+        int classesIndex = path.indexOf("/classes/");
+        if (classesIndex >= 0) {
+            return path.substring(classesIndex + "/classes/".length());
+        }
+
+        // Remove /build/classes/java/main/ prefix (Gradle)
+        int gradleIndex = path.indexOf("/build/classes/java/main/");
+        if (gradleIndex >= 0) {
+            return path.substring(gradleIndex + "/build/classes/java/main/".length());
+        }
+
+        // Remove /build/resources/main/ prefix (Gradle)
+        int resourcesIndex = path.indexOf("/build/resources/main/");
+        if (resourcesIndex >= 0) {
+            return path.substring(resourcesIndex + "/build/resources/main/".length());
+        }
+
+        // Remove leading slash
+        if (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+
+        return path;
+    }
 }

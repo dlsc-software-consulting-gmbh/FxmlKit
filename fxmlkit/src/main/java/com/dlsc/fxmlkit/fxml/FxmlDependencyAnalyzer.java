@@ -4,12 +4,15 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -31,11 +34,17 @@ import java.util.logging.Logger;
  * than {@link URI}'s string-based comparison. This makes {@code Set<URI>} significantly
  * more efficient for collection operations.
  *
+ * <p>Additionally, a fast string pre-check is performed before DOM parsing: if the FXML
+ * content does not contain "fx:include", the expensive DOM parsing is skipped entirely.
+ * This optimization significantly improves performance since most FXML files do not use
+ * fx:include.
+ *
  * <h2>Features</h2>
  * <ul>
  *   <li>Recursive analysis of {@code <fx:include>} elements</li>
  *   <li>Circular dependency detection</li>
  *   <li>Efficient deduplication using {@link URI}</li>
+ *   <li>Fast pre-check to skip unnecessary DOM parsing</li>
  *   <li>Thread-safe (stateless)</li>
  * </ul>
  *
@@ -65,6 +74,11 @@ public final class FxmlDependencyAnalyzer {
      * Alternative FXML namespace (older versions).
      */
     private static final String FXML_NAMESPACE_ALT = "http://javafx.com/fxml";
+
+    /**
+     * Marker string to detect fx:include presence.
+     */
+    private static final String FX_INCLUDE_MARKER = "fx:include";
 
     private FxmlDependencyAnalyzer() {
     }
@@ -114,6 +128,9 @@ public final class FxmlDependencyAnalyzer {
      *   <li>{@code visited}: Current recursion path (detects circular dependencies)</li>
      * </ul>
      *
+     * <p>Performance optimization: Before DOM parsing, a fast string check is performed.
+     * If the content does not contain "fx:include", DOM parsing is skipped entirely.
+     *
      * @param fxmlUri  the FXML file URI
      * @param allFxmls collection of all discovered FXMLs
      * @param visited  tracking set for current recursion path
@@ -136,11 +153,19 @@ public final class FxmlDependencyAnalyzer {
         allFxmls.add(fxmlUri);
 
         try {
-            // Convert to URL for I/O operations
             URL fxmlUrl = fxmlUri.toURL();
 
-            // Parse FXML
-            Document doc = parseXml(fxmlUrl);
+            // Single IO read - content will be reused for both pre-check and DOM parsing
+            byte[] content = readContent(fxmlUrl);
+
+            // Fast pre-check: skip DOM parsing if no fx:include present
+            if (!containsFxInclude(content)) {
+                logger.log(Level.FINEST, "No fx:include found, skipping DOM parse: {0}", fxmlUri);
+                return;
+            }
+
+            // Has fx:include - perform DOM parsing (reuse already-read content)
+            Document doc = parseXml(content);
 
             // Find all fx:include elements
             List<String> includePaths = findIncludePaths(doc);
@@ -173,6 +198,30 @@ public final class FxmlDependencyAnalyzer {
             // Remove from current path
             visited.remove(fxmlUri);
         }
+    }
+
+    /**
+     * Reads the entire content of a URL into a byte array.
+     */
+    private static byte[] readContent(URL url) throws Exception {
+        try (InputStream input = url.openStream()) {
+            return input.readAllBytes();
+        }
+    }
+
+    /**
+     * Fast check for fx:include presence in content.
+     *
+     * <p>This method performs a simple string search which is much faster than
+     * DOM parsing. Most FXML files do not contain fx:include, so this optimization
+     * skips expensive DOM parsing in the majority of cases.
+     */
+    private static boolean containsFxInclude(byte[] content) {
+        // Convert to string for search
+        // Note: FXML is typically UTF-8, but even if encoding differs,
+        // "fx:include" as ASCII bytes will still be found
+        String text = new String(content, StandardCharsets.UTF_8);
+        return text.contains(FX_INCLUDE_MARKER);
     }
 
     /**
@@ -211,11 +260,16 @@ public final class FxmlDependencyAnalyzer {
     }
 
     /**
-     * Parses XML document from URL.
+     * Parses XML document from byte array.
+     *
+     * <p>This method reuses already-read content to avoid duplicate IO operations.
      */
-    private static Document parseXml(URL url) throws Exception {
+    private static Document parseXml(byte[] content) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
+
+        // Security: enable secure processing (JDK built-in)
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
 
         // Security: disable external entities
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
@@ -224,8 +278,6 @@ public final class FxmlDependencyAnalyzer {
 
         DocumentBuilder builder = factory.newDocumentBuilder();
 
-        try (InputStream input = url.openStream()) {
-            return builder.parse(input);
-        }
+        return builder.parse(new ByteArrayInputStream(content));
     }
 }

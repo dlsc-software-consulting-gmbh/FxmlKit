@@ -6,25 +6,14 @@ import java.util.logging.Logger;
 /**
  * Abstract base class for DiAdapter implementations.
  *
- * <p>This class provides a template method pattern for framework-specific
- * DI adapter implementations.
+ * <p>Provides template method pattern for framework-specific DI adapter implementations.
+ * Handles null-safety checks for getInstance and injectMembers, delegates to framework-specific
+ * hook methods {@link #doGetInstance} and {@link #doInjectMembers}.
  *
- * <h2>Key Features</h2>
- * <ul>
- *   <li>Template method pattern for framework-specific implementations</li>
- *   <li>Null-safety checks for getInstance and injectMembers</li>
- *   <li>Framework-neutral design</li>
- * </ul>
+ * <p>Template methods ({@link #getInstance} and {@link #injectMembers}) perform null checks,
+ * hook methods ({@link #doGetInstance} and {@link #doInjectMembers}) contain framework-specific logic.
  *
- * <h2>Template Method Pattern</h2>
- * <ul>
- *   <li><b>Template method:</b> {@link #getInstance(Class)} - handles null checks</li>
- *   <li><b>Hook method:</b> {@link #doGetInstance(Class)} - framework-specific instance creation</li>
- *   <li><b>Template method:</b> {@link #injectMembers(Object)} - handles null checks</li>
- *   <li><b>Hook method:</b> {@link #doInjectMembers(Object)} - framework-specific member injection</li>
- * </ul>
- *
- * <h2>Implementation Guide</h2>
+ * <p>Implementation example:
  * <pre>{@code
  * public class GuiceDiAdapter extends BaseDiAdapter {
  *     private final Injector injector;
@@ -43,27 +32,11 @@ import java.util.logging.Logger;
  *         injector.injectMembers(target);
  *     }
  * }
- *
- * public class LiteDiAdapter extends BaseDiAdapter {
- *     @Override
- *     protected <T> T doGetInstance(Class<T> type) {
- *         return createInstance(type);
- *     }
- *
- *     @Override
- *     protected void doInjectMembers(Object target) {
- *         injectFieldsAndMethods(target);
- *     }
- * }
  * }</pre>
  *
- * <h2>Three-Tier Integration</h2>
- * <p>In the three-tier model, DiAdapter is passed to FxmlView/FxmlViewProvider:
- * <ul>
- *   <li><b>Tier 1 (Zero-Config):</b> No DiAdapter, views use no-arg constructor</li>
- *   <li><b>Tier 2 (Global DI):</b> Global DiAdapter via {@code FxmlKit.setDiAdapter()}</li>
- *   <li><b>Tier 3 (Isolated DI):</b> Per-instance DiAdapter via constructor injection</li>
- * </ul>
+ * <p>In the three-tier model: Tier 1 (zero-config) uses no DiAdapter, Tier 2 (global DI)
+ * uses DiAdapter via {@code FxmlKit.setDiAdapter()}, Tier 3 (isolated DI) uses per-instance
+ * DiAdapter via constructor injection.
  *
  * @see DiAdapter
  * @see LiteDiAdapter
@@ -118,16 +91,12 @@ public abstract class BaseDiAdapter implements DiAdapter {
      * Creates an instance using the DI framework.
      *
      * <p>This is the primary hook method that subclasses must implement.
-     * It should create and return an instance using the framework's
-     * instantiation mechanism.
+     * Should create and return an instance using the framework's instantiation mechanism.
      *
-     * <p><b>Implementation Examples:</b>
-     * <ul>
-     *   <li><b>Guice:</b> {@code return injector.getInstance(type);}</li>
-     *   <li><b>Spring:</b> {@code return applicationContext.getBean(type);}</li>
-     *   <li><b>Jakarta CDI:</b> {@code return CDI.current().select(type).get();}</li>
-     *   <li><b>LiteDiAdapter:</b> Create instance with constructor injection</li>
-     * </ul>
+     * <p>Implementation examples: Guice uses {@code injector.getInstance(type)},
+     * Spring uses {@code applicationContext.getBean(type)}, Jakarta CDI uses
+     * {@code CDI.current().select(type).get()}, LiteDiAdapter creates instance
+     * with constructor injection.
      *
      * @param <T>  the type parameter
      * @param type the class to instantiate (never null)
@@ -142,14 +111,11 @@ public abstract class BaseDiAdapter implements DiAdapter {
      * <p>This is an optional hook method. Subclasses should override this if their
      * framework has a separate member injection method.
      *
-     * <p><b>Default Implementation:</b> No-op (assumes getInstance does everything).
+     * <p>Default implementation is no-op (assumes getInstance does everything).
      *
-     * <p><b>Override Examples:</b>
-     * <ul>
-     *   <li><b>Guice:</b> {@code injector.injectMembers(target);}</li>
-     *   <li><b>Spring:</b> {@code beanFactory.autowireBean(target);}</li>
-     *   <li><b>LiteDiAdapter:</b> Custom field/method injection logic</li>
-     * </ul>
+     * <p>Override examples: Guice uses {@code injector.injectMembers(target)},
+     * Spring uses {@code beanFactory.autowireBean(target)}, LiteDiAdapter uses
+     * custom field/method injection logic.
      *
      * @param target the object to inject (never null)
      * @throws RuntimeException if injection fails

@@ -2,9 +2,12 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-**FxmlKit = 自动 FXML 加载 + 可选依赖注入 + 简化 JavaFX 开发**
+**FxmlKit = 自动 FXML 加载 + 热更新 + 可选依赖注入**
 
 ```java
+// 开发时启用 FXML/CSS 热更新
+FxmlKit.enableDevelopmentMode();
+
 // 零配置 - 自动加载 FXML
 new MainView();
 
@@ -12,7 +15,7 @@ new MainView();
 new MainView(diAdapter);
 ```
 
-现代化的 JavaFX FXML 框架，消除样板代码，提供可选的渐进式依赖注入支持。
+现代化的 JavaFX FXML 框架，消除样板代码，提供 FXML/CSS 热更新，以及可选的渐进式依赖注入支持。
 
 [English](README.md) | [示例项目](fxmlkit-samples)
 
@@ -25,6 +28,7 @@ new MainView(diAdapter);
 - [致谢（Acknowledgments）](#致谢acknowledgments)
 - [快速开始](#快速开始)
 - [使用方式](#使用方式)
+- [热更新](#热更新)
 - [核心概念](#核心概念)
 - [注解](#注解)
 - [常见问题](#常见问题)
@@ -34,7 +38,29 @@ new MainView(diAdapter);
 
 ## 为什么选择 FxmlKit
 
-### 痛点一：原生 FXML 加载需要大量样板代码
+### 痛点一：UI 开发时没有热更新
+
+传统 JavaFX 开发中，每次修改 FXML 或 CSS 文件都需要重启应用才能看到效果。这大大降低了 UI 开发效率。
+
+**FxmlKit 方案：**
+
+```java
+public class MyApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        FxmlKit.enableDevelopmentMode();  // ✅ 一行代码启用热更新
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+现在编辑 `.fxml` 或 `.css` 文件，保存后即刻生效 — 无需重启！
+
+---
+
+### 痛点二：原生 FXML 加载需要大量样板代码
 
 每个视图都要重复：获取 URL、配置 FXMLLoader、处理异常、加载样式表……
 
@@ -49,7 +75,7 @@ public class LoginView extends FxmlView<LoginController> {
 
 ---
 
-### 痛点二：FXML 自定义组件几乎无法接收依赖注入
+### 痛点三：FXML 自定义组件几乎无法接收依赖注入
 
 传统方式下，FXML 中的自定义组件由 FXMLLoader 直接实例化，无法访问 DI 容器。
 
@@ -73,18 +99,11 @@ FXML 节点也能自动注入：
 ```java
 @FxmlObject  // 一个注解搞定
 public class StatusCard extends VBox {
-    @Inject private StatusService statusService;  // 自动注入！
-    
-    private final Label statusLabel;
-    
-    public StatusCard() {
-        statusLabel = new Label();
-        getChildren().add(statusLabel);
-    }
+    @Inject private StatusService statusService;
     
     @PostInject
     private void afterInject() {
-        updateStatus();  // 直接使用注入的服务
+        updateStatus();
     }
 }
 ```
@@ -92,8 +111,7 @@ public class StatusCard extends VBox {
 在 FXML 中直接使用：
 ```xml
 <VBox>
-    <StatusCard/>  <!-- ✅ 自动注入 statusService -->
-    <StatusCard/>  <!-- ✅ 每个实例都自动注入 -->
+    <StatusCard/>  <!-- ✅ 自动注入依赖 -->
 </VBox>
 ```
 
@@ -105,6 +123,7 @@ public class StatusCard extends VBox {
 
 - **零配置** — 开箱即用，无需任何设置
 - **约定优于配置** — 自动发现 FXML 和样式表文件
+- **热更新** — 开发时 FXML 和 CSS 修改即刻生效
 - **可选依赖注入** — 不需要 DI 框架也能使用，需要时可以添加
 - **自动样式表** — 自动附加 `.bss` 和 `.css` 文件
 - **嵌套 FXML** — 完整支持 `<fx:include>` 层级结构
@@ -115,6 +134,7 @@ public class StatusCard extends VBox {
 
 | 功能 | JavaFX 原生 | FxmlKit |
 |------|------------|---------|
+| 热更新（FXML + CSS） | ❌ 需要重启应用 | ✅ 即刻刷新 |
 | FXML 自动加载 | ❌ 手动编写加载代码 | ✅ 零配置自动加载 |
 | 样式表自动附加 | ❌ 手动代码附加 | ✅ 自动附加（含嵌套 FXML） |
 | 控制器依赖注入 | ⚠️ 需手动配置工厂 | ✅ 自动注入 |
@@ -127,7 +147,8 @@ public class StatusCard extends VBox {
 
 ## 致谢（Acknowledgments）
 
-FxmlKit 的约定优于配置理念（通过类名自动解析 FXML/CSS）受到 [afterburner.fx](https://github.com/AdamBien/afterburner.fx) 的启发。我们在此基础上扩展了 FXML 节点注入、多层嵌套支持和 JPro 多用户隔离等功能。
+- **[afterburner.fx](https://github.com/AdamBien/afterburner.fx)** — 启发了我们的约定优于配置理念（按类名自动解析 FXML/CSS）。我们在此基础上扩展了 FXML 节点注入、多层嵌套支持和 JPro 多用户隔离。
+- **[CSSFX](https://github.com/McFoggy/cssfx)** — 启发了我们的 CSS 热重载方案（file:// URI 替换）。我们的实现采用了共享 WatchService、防抖刷新和基于 WeakReference 的惰性清理。
 
 ---
 
@@ -172,6 +193,8 @@ implementation 'com.google.inject:guice:7.0.0'
 ```
 
 **如果需要使用其他 DI 框架：** 可以继续使用 `fxmlkit` 核心模块，然后实现 `DiAdapter` 接口或继承 `BaseDiAdapter` 类来适配你的 DI 框架。同样地，即使使用 Guice，你也可以选择不依赖 `fxmlkit-guice` 模块，而是自己实现一个 `GuiceDiAdapter`（参考 `fxmlkit-guice` 的源码，实现非常简单）。
+
+---
 
 ### 创建你的第一个视图
 
@@ -251,16 +274,14 @@ FxmlKit 支持三种使用方式，根据你的需求选择：
 **适用场景：** 学习 JavaFX、快速原型、简单应用
 
 ```java
-// 不需要任何配置
 public class MainView extends FxmlView<MainController> {
 }
 
-// 直接使用
+// 使用
 stage.setScene(new Scene(new MainView()));
 ```
 
 **特点：**
-- ✅ 无需任何设置
 - ✅ 自动加载 FXML
 - ✅ 自动附加样式表
 - ✅ 控制器自动创建
@@ -272,50 +293,30 @@ stage.setScene(new Scene(new MainView()));
 
 **适用场景：** 需要依赖注入的桌面应用
 
-**一次性配置：**
 ```java
-public class MyApp extends Application {
+// 应用启动时 - 设置全局 DI 适配器
+Injector injector = Guice.createInjector(new AbstractModule() {
     @Override
-    public void start(Stage stage) {
-        // 在启动时配置一次
-        Injector injector = Guice.createInjector(new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(UserService.class).toInstance(new UserService());
-                bind(ConfigService.class).toInstance(new ConfigService());
-            }
-        });
-        
-        FxmlKit.setDiAdapter(new GuiceDiAdapter(injector));
-        
-        // 然后正常使用
-        stage.setScene(new Scene(new MainView()));
-        stage.show();
+    protected void configure() {
+        bind(UserService.class).toInstance(new UserService());
+        bind(ConfigService.class).toInstance(new ConfigService());
     }
-}
-```
+});
+FxmlKit.setDiAdapter(new GuiceDiAdapter(injector));
 
-**控制器支持注入：**
-```java
-public class MainController {
-    @Inject private UserService userService;
-    @Inject private ConfigService configService;
-    
-    @PostInject
-    private void afterInject() {
-        // 注入完成后调用
-        System.out.println("当前用户: " + userService.getCurrentUser());
-    }
+// 创建视图 - 控制器和节点自动接收注入
+public class LoginView extends FxmlView<LoginController> {
 }
+
+// 使用 - 与零配置模式相同
+LoginView view = new LoginView();
 ```
 
 **特点：**
-- ✅ 方式一的所有特性
-- ✅ 支持 `@Inject` 字段注入
-- ✅ 支持 `@PostInject` 生命周期
-- ✅ 可选 - 不用也能工作
-
-**支持多种 DI 框架：** 内置的 `LiteDiAdapter`（轻量级）、Google Guice、Jakarta CDI，以及任何实现 `DiAdapter` 接口的框架。
+- ✅ 全局 DI 配置 - 设置一次，随处使用
+- ✅ 控制器自动注入
+- ✅ FXML 节点自动注入（使用 `@FxmlObject`）
+- ✅ 支持多种 DI 框架（Guice、Spring、CDI 等）
 
 ---
 
@@ -323,31 +324,125 @@ public class MainController {
 
 **适用场景：** JPro Web 应用，每个用户需要独立数据
 
-**核心思想：** 每个用户会话创建独立的 DI 容器，通过构造函数注入到视图。
+```java
+// 为每个用户会话创建独立的 DI 容器
+Injector userInjector = Guice.createInjector(new AbstractModule() {
+    @Override
+    protected void configure() {
+        bind(UserSession.class).toInstance(new UserSession(userId));
+        bind(UserService.class).toInstance(new UserService());
+    }
+});
+
+// 创建视图时传递 DI 适配器
+LoginView view = new LoginView(new GuiceDiAdapter(userInjector));
+```
+
+**适用场景：**
+- JPro Web 应用（每个用户会话一个 DI 容器）
+- 桌面应用（每个 Tab/窗口一个 DI 容器）
+- 需要严格数据隔离的场景
+
+---
+
+## 热更新
+
+FxmlKit 内置热更新功能，加速 UI 开发。编辑 FXML 或 CSS 文件后，无需重启即可看到效果。
+
+### 快速开始
 
 ```java
-// 用户视图：接收独立的 DI 容器
-public class UserDashboardView extends FxmlView<DashboardController> {
-    @Inject
-    public UserDashboardView(DiAdapter diAdapter) {
-        super(diAdapter);  // 传递用户专属的 DI 容器
+public class MyApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        // 启用热更新（必须在创建视图之前调用）
+        FxmlKit.enableDevelopmentMode();
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
     }
 }
 ```
 
+**重要：** `enableDevelopmentMode()` 必须在创建任何视图**之前**调用。启用前创建的视图不会被监控。
+
+### 工作原理
+
+| 文件类型 | 行为 | 运行时状态 |
+|----------|------|------------|
+| `.fxml` | 完整视图重载 | 丢失（用户输入、滚动位置） |
+| `.css` / `.bss` | 仅刷新样式表 | **保留** |
+
+### 精细控制
+
 ```java
-// 为每个用户创建独立的 DI 容器
-Injector userInjector = Guice.createInjector(new UserModule(currentUser));
-UserDashboardView view = userInjector.getInstance(UserDashboardView.class);
+// 仅启用 FXML 热更新
+FxmlKit.setFxmlHotReloadEnabled(true);
+
+// 仅启用 CSS 热更新
+FxmlKit.setCssHotReloadEnabled(true);
+
+// 同时启用（等同于 enableDevelopmentMode()）
+FxmlKit.setFxmlHotReloadEnabled(true);
+FxmlKit.setCssHotReloadEnabled(true);
+
+// 全部禁用
+FxmlKit.disableDevelopmentMode();
 ```
 
-**特点：**
-- ✅ 方式二的所有特性
-- ✅ 完全的用户数据隔离
-- ✅ 无交叉污染风险
-- ✅ 线程安全
+### 与 CSSFX 配合使用
 
-> 💡 **完整示例：** 请参考 `fxmlkit-samples` 模块中的 `tier3.multiuser` 包，包含模拟 JPro 多用户场景的完整实现（使用 TabPane 模拟多用户会话）。
+如果你更喜欢用 [CSSFX](https://github.com/McFoggy/cssfx) 做 CSS 热更新，可以禁用 FxmlKit 的内置 CSS 监控：
+
+```java
+// 仅使用 FxmlKit 的 FXML 热更新
+FxmlKit.setFxmlHotReloadEnabled(true);
+FxmlKit.setCssHotReloadEnabled(false);
+
+// 使用 CSSFX 处理 CSS
+CSSFX.start();
+```
+
+### 生产环境警告
+
+**热更新仅用于开发环境。** 不要在生产环境启用。
+
+**方式一：发布前直接注释掉**
+
+```java
+public class MyApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        // FxmlKit.enableDevelopmentMode();  // 生产环境注释掉这行
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+**方式二：使用 JVM 参数自动切换**
+
+```java
+public class MyApp extends Application {
+    // 通过 JVM 参数设置：-Ddev.mode=true
+    private static final boolean DEV_MODE = Boolean.getBoolean("dev.mode");
+    
+    @Override
+    public void start(Stage stage) {
+        if (DEV_MODE) {
+            FxmlKit.enableDevelopmentMode();
+        }
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+开发环境运行：`java -Ddev.mode=true -jar myapp.jar`
+
+生产环境运行：`java -jar myapp.jar`
 
 ---
 
@@ -373,7 +468,7 @@ src/main/resources/com/example/
 | **类型** | IS-A Node (继承 StackPane) | HAS-A Node (持有 Parent) |
 | **加载** | 立即加载（构造时） | 惰性加载（首次调用 `getView()`） |
 | **使用** | 直接作为 Node 使用 | 需要调用 `getView()` 获取 Node |
-| **适用场景** | 直接作为节点使用	 | 延迟加载，节省资源 |
+| **适用场景** | 直接作为节点使用 | 延迟加载，节省资源 |
 
 **FxmlView 示例：**
 ```java
@@ -451,22 +546,21 @@ public class LoginView extends FxmlView<LoginController> {}
 - 非可视对象（如 MenuItem、ContextMenu 等）
 - 任何在 FXML 中声明的自定义类
 
-**使用场景：** 当你在 FXML 中使用自定义组件或对象，并且需要注入服务时使用。
-
-**类级别注解：**
+**示例 - 自定义控件：**
 ```java
-// 自定义控件
 @FxmlObject
-public class StatusCard extends VBox {
-    @Inject private StatusService statusService;
+public class UserAvatar extends Circle {
+    @Inject private UserService userService;
     
     @PostInject
     private void afterInject() {
-        updateStatus();
+        loadUserImage();
     }
 }
+```
 
-// 非可视对象
+**示例 - 非可视对象：**
+```java
 @FxmlObject
 public class CustomMenuItem extends MenuItem {
     @Inject private ActionService actionService;
@@ -480,15 +574,11 @@ public class CustomMenuItem extends MenuItem {
 
 **FXML 中使用：**
 ```xml
-<VBox>
-    <StatusCard/>  <!-- 自动接收依赖注入 -->
-    
-    <MenuBar>
-        <Menu text="操作">
-            <CustomMenuItem text="执行"/>  <!-- 也能接收注入 -->
-        </Menu>
-    </MenuBar>
-</VBox>
+<MenuBar>
+    <Menu text="操作">
+        <CustomMenuItem text="执行"/>  <!-- 也能接收注入 -->
+    </Menu>
+</MenuBar>
 ```
 
 **注意：** 
@@ -499,22 +589,23 @@ public class CustomMenuItem extends MenuItem {
 
 ### @PostInject - 注入后回调
 
-**作用：** 标记一个方法在所有依赖注入完成后立即执行。
+**作用：** 标记一个方法在所有 `@Inject` 字段注入完成后立即执行。
 
 **使用场景：** 需要在依赖注入完成后进行初始化操作时使用（如加载数据、设置监听器等）。
 
-**方法级别注解：**
+**执行时机：** 所有 `@Inject` 字段注入完成后立即执行。
+
+**示例：**
 ```java
-public class UserController {
+public class UserProfileController {
     @Inject private UserService userService;
     @Inject private ConfigService configService;
     
     @PostInject
     private void afterInject() {
-        // ✅ 所有 @Inject 字段已就绪
-        User user = userService.getCurrentUser();
-        Config config = configService.loadConfig();
-        initialize(user, config);
+        // 所有 @Inject 字段已就绪
+        userService.loadUserData();
+        configService.applySettings();
     }
 }
 ```
@@ -522,7 +613,6 @@ public class UserController {
 **方法要求：**
 - 必须是无参方法
 - 可以是任何访问级别（private、protected、public）
-- 可以有返回值（但会被忽略）
 - 支持继承（父类的 @PostInject 方法会先执行）
 
 ---
@@ -531,7 +621,7 @@ public class UserController {
 
 ### Q: FxmlKit 必须使用依赖注入框架吗？
 
-**A: 不需要！** FxmlKit 的核心功能（FXML 加载、样式表附加）无需任何 DI 框架。依赖注入是**完全可选**的，只有当你的应用需要时才使用。
+**A:** 不需要！FxmlKit 的核心功能（FXML 加载、样式表附加）无需任何 DI 框架。依赖注入是**完全可选**的，只有当你的应用需要时才使用。
 
 ---
 
@@ -573,16 +663,15 @@ FxmlKit.setDiAdapter(diAdapter);
 
 ---
 
-### 问：@PostInject 方法何时执行？
+### Q: @PostInject 方法何时执行？
 
-**答：** 在依赖注入完成后执行。Controllers 和节点的执行时机不同：
+**A:** 在依赖注入完成后执行。Controllers 和节点的执行时机不同：
 
 #### 对于 Controllers
 
 **执行顺序：** `Constructor → @Inject → @FXML → initialize() → @PostInject`
 
 通常**不需要** - 直接使用 `initialize()` 即可：
-
 ```java
 public class LoginController implements Initializable {
     @Inject private UserService userService;  // ① 注入
@@ -607,7 +696,6 @@ public class LoginController implements Initializable {
 **执行顺序：** `Constructor → @Inject → @PostInject`
 
 如果需要使用注入的依赖，则**必须使用**：
-
 ```java
 @FxmlObject
 public class StatusLabel extends Label {
@@ -631,28 +719,53 @@ public class StatusLabel extends Label {
 
 ### Q: 样式表没有生效？
 
-**检查：**
-1. 样式表是否与 FXML 同名？`LoginView.fxml` → `LoginView.css`
-2. 样式表是否在同目录？
-3. 是否禁用了自动附加？检查 `FxmlKit.isAutoAttachStyles()`
+**A:** 检查以下几点：
+
+1. **文件命名：** 必须与类名匹配 - `LoginView.java` → `LoginView.css`
+2. **文件位置：** 必须在相同的包资源目录下
+3. **自动附加已启用：** `FxmlKit.setAutoAttachStyles(true)`（默认为 true）
+4. **CSS 优先级：** `.bss` 文件优先级高于 `.css`
+
+---
+
+### Q: 热更新不生效？
+
+**A:** 检查以下几点：
+
+1. **调用顺序：** `enableDevelopmentMode()` 必须在创建视图**之前**调用
+2. **文件位置：** 源文件必须在 `src/main/resources`（Maven/Gradle 标准目录）
+3. **IDE 自动构建：** 在 IDE 中启用自动构建，实现无缝热更新
+4. **调试日志：** 设置 `FxmlKit.setLogLevel(Level.FINE)` 查看热更新日志
 
 ---
 
 ### Q: 如何在 JPro 中使用？
 
-使用方式三（独立 DI 容器），每个用户会话创建独立的 Injector：
+**A:** FxmlKit 已为 JPro 做好准备。为每个用户会话创建独立的 DI 容器：
 
 ```java
-// 每个用户
-Injector userInjector = Guice.createInjector(new UserModule(user));
-UserView view = userInjector.getInstance(UserView.class);
+public class JProApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        // 为每个用户创建独立的 DI 容器
+        Injector userInjector = createUserInjector();
+        
+        // 创建视图时传递 DI 适配器
+        MainView view = new MainView(new GuiceDiAdapter(userInjector));
+        
+        Scene scene = new Scene(view);
+        stage.setScene(scene);
+    }
+}
 ```
+
+参考 `fxmlkit-samples` 模块中的 `tier3.multiuser` 包，包含模拟 JPro 多用户场景的完整实现（使用 TabPane 模拟多用户会话）。
 
 ---
 
 ## 示例项目
 
-`fxmlkit-samples` 模块包含完整的示例代码，展示了各种使用场景：
+`fxmlkit-samples` 模块包含完整的示例代码，按复杂度分为三个层级：
 
 ### Tier 1 - 零配置模式
 
@@ -661,7 +774,7 @@ tier1/
 ├── hello/          # 最简单的 Hello World
 ├── i18n/           # 国际化示例
 ├── provider/       # FxmlViewProvider 使用示例
-└── viewpath/       # 自定义 FXML 路径（@FxmlPath）
+└── viewpath/       # 自定义 FXML 路径
 ```
 
 ### Tier 2 - 可选依赖注入

@@ -2,9 +2,12 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-**FxmlKit = Automatic FXML Loading + Optional Dependency Injection + Simplified JavaFX Development**
+**FxmlKit = Automatic FXML Loading + Hot Reload + Optional Dependency Injection**
 
 ```java
+// Enable FXML/CSS hot reload during development
+FxmlKit.enableDevelopmentMode();
+
 // Zero configuration - automatic FXML loading
 new MainView();
 
@@ -12,7 +15,7 @@ new MainView();
 new MainView(diAdapter);
 ```
 
-A modern JavaFX FXML framework that eliminates boilerplate code and provides optional, progressive dependency injection support.
+A modern JavaFX FXML framework that eliminates boilerplate code, provides FXML/CSS hot reload, and optional progressive dependency injection support.
 
 [中文文档](README_CN.md) | [Sample Projects](fxmlkit-samples)
 
@@ -25,6 +28,7 @@ A modern JavaFX FXML framework that eliminates boilerplate code and provides opt
 - [Acknowledgments](#acknowledgments)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
+- [Hot Reload](#hot-reload)
 - [Core Concepts](#core-concepts)
 - [Annotations](#annotations)
 - [FAQ](#faq)
@@ -34,7 +38,29 @@ A modern JavaFX FXML framework that eliminates boilerplate code and provides opt
 
 ## Why FxmlKit?
 
-### Pain Point 1: Native FXML Loading Requires Massive Boilerplate
+### Pain Point 1: No Hot Reload During UI Development
+
+With traditional JavaFX development, every FXML or CSS change requires restarting the application to see the effect. This slows down UI development significantly.
+
+**FxmlKit Solution:**
+
+```java
+public class MyApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        FxmlKit.enableDevelopmentMode();  // ✅ One line to enable hot reload
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+Now edit your `.fxml` or `.css` files, save, and see changes instantly — no restart required!
+
+---
+
+### Pain Point 2: Native FXML Loading Requires Massive Boilerplate
 
 Every view requires repetitive code: getting URL, configuring FXMLLoader, handling exceptions, loading stylesheets...
 
@@ -49,7 +75,7 @@ Automatically handles FXML parsing, stylesheet attachment, controller creation, 
 
 ---
 
-### Pain Point 2: FXML Custom Components Cannot Receive Dependency Injection
+### Pain Point 3: FXML Custom Components Cannot Receive Dependency Injection
 
 In traditional approaches, custom components declared in FXML are directly instantiated by FXMLLoader and cannot access the DI container.
 
@@ -97,6 +123,7 @@ FXML usage:
 
 - **Zero Configuration** — Works out of the box, no setup required
 - **Convention over Configuration** — Automatically discovers FXML and stylesheet files
+- **Hot Reload** — FXML and CSS changes reflect instantly during development
 - **Optional Dependency Injection** — Works without DI frameworks, add them when needed
 - **Automatic Stylesheets** — Auto-attaches `.bss` and `.css` files
 - **Nested FXML** — Full support for `<fx:include>` hierarchies
@@ -107,6 +134,7 @@ FXML usage:
 
 | Feature | Native JavaFX | FxmlKit |
 |---------|---------------|---------|
+| Hot Reload (FXML + CSS) | ❌ Restart required | ✅ Instant refresh |
 | Automatic FXML Loading | ❌ Manual loading code | ✅ Zero-config auto-loading |
 | Automatic Stylesheet Attachment | ❌ Manual code required | ✅ Auto-attach (including nested FXML) |
 | Controller Dependency Injection | ⚠️ Manual factory setup | ✅ Automatic injection |
@@ -119,7 +147,8 @@ FXML usage:
 
 ## Acknowledgments
 
-FxmlKit's convention-over-configuration approach (auto-resolving FXML/CSS by class name) was influenced by [afterburner.fx](https://github.com/AdamBien/afterburner.fx). We've extended this foundation with FXML node injection, multi-layer nesting support, and JPro multi-user isolation.
+- **[afterburner.fx](https://github.com/AdamBien/afterburner.fx)** — Inspired our convention-over-configuration approach (auto-resolving FXML/CSS by class name). We extended this with FXML node injection, multi-layer nesting, and JPro multi-user isolation.
+- **[CSSFX](https://github.com/McFoggy/cssfx)** — Inspired our CSS hot reload approach (file:// URI replacement). Our implementation features shared WatchService, debounced refresh, and WeakReference-based cleanup.
 
 ---
 
@@ -313,6 +342,107 @@ LoginView view = new LoginView(new GuiceDiAdapter(userInjector));
 - JPro web applications (one DI container per user session)
 - Desktop applications (one DI container per Tab/Window)
 - Scenarios requiring strict data isolation
+
+---
+
+## Hot Reload
+
+FxmlKit provides built-in hot reload for rapid UI development. Edit your FXML or CSS files and see changes instantly without restarting.
+
+### Quick Start
+
+```java
+public class MyApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        // Enable hot reload (call BEFORE creating views)
+        FxmlKit.enableDevelopmentMode();
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+**Important:** Call `enableDevelopmentMode()` **before** creating any views. Views created before enabling won't be monitored.
+
+### How It Works
+
+| File Type | Behavior | Runtime State |
+|-----------|----------|---------------|
+| `.fxml` | Full view reload | Lost (user input, scroll position) |
+| `.css` / `.bss` | Stylesheet refresh only | **Preserved** |
+
+### Fine-Grained Control
+
+```java
+// Enable only FXML hot reload
+FxmlKit.setFxmlHotReloadEnabled(true);
+
+// Enable only CSS hot reload
+FxmlKit.setCssHotReloadEnabled(true);
+
+// Enable both (equivalent to enableDevelopmentMode())
+FxmlKit.setFxmlHotReloadEnabled(true);
+FxmlKit.setCssHotReloadEnabled(true);
+
+// Disable all
+FxmlKit.disableDevelopmentMode();
+```
+
+### Using with CSSFX
+
+If you prefer [CSSFX](https://github.com/McFoggy/cssfx) for CSS hot reload, disable FxmlKit's built-in CSS monitoring:
+
+```java
+// Use FxmlKit for FXML hot reload only
+FxmlKit.setFxmlHotReloadEnabled(true);
+FxmlKit.setCssHotReloadEnabled(false);
+
+// Use CSSFX for CSS
+CSSFX.start();
+```
+
+### Production Warning
+
+**Hot reload is for development only.** Do not enable in production environments.
+
+**Option 1: Simply comment out the line before release**
+
+```java
+public class MyApp extends Application {
+    @Override
+    public void start(Stage stage) {
+        // FxmlKit.enableDevelopmentMode();  // Comment out for production
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+**Option 2: Use JVM argument for automatic switching**
+
+```java
+public class MyApp extends Application {
+    // Set via JVM argument: -Ddev.mode=true
+    private static final boolean DEV_MODE = Boolean.getBoolean("dev.mode");
+    
+    @Override
+    public void start(Stage stage) {
+        if (DEV_MODE) {
+            FxmlKit.enableDevelopmentMode();
+        }
+        
+        stage.setScene(new Scene(new MainView()));
+        stage.show();
+    }
+}
+```
+
+Run in development: `java -Ddev.mode=true -jar myapp.jar`
+
+Run in production: `java -jar myapp.jar`
 
 ---
 
@@ -601,6 +731,17 @@ public class StatusLabel extends Label {
 2. **File location:** Must be in same package resource directory
 3. **Auto-attach enabled:** `FxmlKit.setAutoAttachStyles(true)` (default is true)
 4. **CSS priority:** `.bss` files have higher priority than `.css`
+
+---
+
+### Q: Hot reload not working?
+
+**A:** Check these:
+
+1. **Call order:** `enableDevelopmentMode()` must be called **before** creating views
+2. **File location:** Source files must be in `src/main/resources` (Maven/Gradle standard)
+3. **IDE auto-build:** Enable automatic build in your IDE for seamless hot reload
+4. **Debug logging:** Set `FxmlKit.setLogLevel(Level.FINE)` to see hot reload messages
 
 ---
 

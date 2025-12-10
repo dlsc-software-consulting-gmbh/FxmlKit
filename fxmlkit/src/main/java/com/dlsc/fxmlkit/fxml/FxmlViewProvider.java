@@ -1,8 +1,10 @@
 package com.dlsc.fxmlkit.fxml;
 
+import com.dlsc.fxmlkit.core.DiAdapter;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
+import com.dlsc.fxmlkit.hotreload.HotReloadable;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
-import com.dlsc.fxmlkit.core.DiAdapter;
 
 import java.net.URL;
 import java.util.Optional;
@@ -14,51 +16,31 @@ import java.util.logging.Logger;
  * Base class for FXML-backed views with progressive DI support.
  *
  * <p>This class provides a HAS-A relationship with the FXML view (returns Parent via getView()),
- * as opposed to FxmlView which IS-A JavaFX node.
+ * as opposed to FxmlView which IS-A JavaFX node. When hot reload is enabled, providers
+ * automatically register for file change monitoring.
  *
- * <h2>Three-Tier Model</h2>
+ * <p>Three-tier usage:
  *
- * <h3>Tier 1 — Zero Configuration (No DI)</h3>
- * <p>Minimal FXML loading without any DI framework.
+ * <p>Tier 1 (Zero-Config):
  * <pre>{@code
  * public class MainViewProvider extends FxmlViewProvider<MainController> {}
  *
- * // No global setup required
  * MainViewProvider provider = new MainViewProvider();
  * stage.setScene(new Scene(provider.getView()));
  * }</pre>
  *
- * <p>Features:
- * <ul>
- *   <li>Load FXML and attach .bss/.css automatically</li>
- *   <li>Controller is created via no-arg constructor</li>
- *   <li>No field/method injection; no @PostInject; no @FxmlObject processing</li>
- * </ul>
- *
- * <h3>Tier 2 — Global DI (Single-User Desktop)</h3>
- * <p>One-time DI adapter configuration; all views use the same adapter.
+ * <p>Tier 2 (Global DI):
  * <pre>{@code
- * // One-time setup at application startup
  * LiteDiAdapter di = new LiteDiAdapter();
  * di.bindInstance(UserService.class, new UserService());
  * FxmlKit.setDiAdapter(di);
  *
- * // Then use normally
  * MainViewProvider provider = new MainViewProvider();
  * Parent root = provider.getView();
  * }</pre>
  *
- * <p>Adds:
- * <ul>
- *   <li>Field/method injection</li>
- *   <li>@PostInject callbacks</li>
- *   <li>@FxmlObject node processing (policy-dependent)</li>
- * </ul>
- *
- * <h3>Tier 3 — Per-Instance DI (JPro Multi-User)</h3>
- * <p>Each view instance carries an isolated {@link DiAdapter}.
+ * <p>Tier 3 (Isolated DI):
  * <pre>{@code
- * // User-specific provider class with constructor injection
  * public class MainViewProvider extends FxmlViewProvider<MainController> {
  *     @Inject
  *     public MainViewProvider(DiAdapter diAdapter) {
@@ -66,32 +48,30 @@ import java.util.logging.Logger;
  *     }
  * }
  *
- * // Create via DI framework
  * Injector injector = Guice.createInjector(new UserModule(user));
  * MainViewProvider provider = injector.getInstance(MainViewProvider.class);
- * Parent root = provider.getView();  // Uses per-user DI
  * }</pre>
  *
- * <h2>Framework Neutrality</h2>
- * <p>This class has no dependency on any DI framework or annotations. Member
- * injection is enabled by passing a {@link DiAdapter} (globally via {@code FxmlKit},
- * or per-instance via constructor).
+ * <p>Tier 1 provides minimal FXML loading without DI. Controllers are created via no-arg
+ * constructor with no field/method injection, @PostInject, or @FxmlObject processing.
  *
- * <h2>Automatic Stylesheet Attachment</h2>
- * <p>Stylesheets are automatically attached for the entire FXML hierarchy:
- * <ul>
- *   <li>Main FXML and all nested {@code <fx:include>} files</li>
- *   <li>Searches for .bss (binary) and .css (text) in same directory as each FXML</li>
- *   <li>Optimized: Skips if stylesheet already declared in FXML</li>
- * </ul>
+ * <p>Tier 2 adds field/method injection, @PostInject callbacks, and @FxmlObject node
+ * processing (policy-dependent) using a single global DiAdapter.
  *
- * <h2>Adapter Ecosystem</h2>
- * <p>Works with any framework that provides a {@link DiAdapter}:
- * Guice, Spring, Jakarta CDI, or the built-in LiteDiAdapter.
+ * <p>Tier 3 provides per-instance DiAdapter for isolated dependency contexts, typically
+ * used in multi-user scenarios where each user session has its own dependency graph.
+ *
+ * <p>This class has no dependency on any DI framework or annotations. Works with any
+ * framework that provides a {@link DiAdapter}: Guice, Spring, Jakarta CDI, or the
+ * built-in LiteDiAdapter.
+ *
+ * <p>Stylesheets are automatically attached for the entire FXML hierarchy (main FXML and
+ * all nested fx:include files). Searches for .bss and .css in same directory as each FXML,
+ * skipping if already declared in FXML.
  *
  * @param <T> the controller type
  */
-public abstract class FxmlViewProvider<T> {
+public abstract class FxmlViewProvider<T> implements HotReloadable {
 
     private static final Logger logger = Logger.getLogger(FxmlViewProvider.class.getName());
 
@@ -117,13 +97,25 @@ public abstract class FxmlViewProvider<T> {
     private ResourceBundle resources;
 
     /**
+     * Whether this provider has been registered for hot reload.
+     */
+    private boolean registeredForHotReload = false;
+
+    /**
+     * Cached FXML URL for hot reload.
+     */
+    private URL cachedFxmlUrl;
+
+    /**
+     * Cached resource path for hot reload.
+     */
+    private String cachedResourcePath;
+
+    /**
      * Constructs the provider using global DiAdapter (Tier 1/2).
      *
-     * <p>This constructor is used for:
-     * <ul>
-     *   <li><b>Tier 1:</b> When no DiAdapter is configured (zero-config mode)</li>
-     *   <li><b>Tier 2:</b> When a global DiAdapter is set via {@code FxmlKit.setDiAdapter()}</li>
-     * </ul>
+     * <p>Used for Tier 1 when no DiAdapter is configured (zero-config mode),
+     * or Tier 2 when a global DiAdapter is set via {@code FxmlKit.setDiAdapter()}.
      */
     protected FxmlViewProvider() {
         this(FxmlKit.getDiAdapter(), null);
@@ -132,7 +124,7 @@ public abstract class FxmlViewProvider<T> {
     /**
      * Constructs the provider with a resource bundle using global DiAdapter (Tier 1/2).
      *
-     * @param resources the resource bundle for i18n (maybe null)
+     * @param resources the resource bundle for i18n (may be null)
      */
     protected FxmlViewProvider(ResourceBundle resources) {
         this(FxmlKit.getDiAdapter(), resources);
@@ -141,18 +133,8 @@ public abstract class FxmlViewProvider<T> {
     /**
      * Constructs the provider with a specific DiAdapter (Tier 3).
      *
-     * <p>This constructor is used for Tier 3 (isolated DI) scenarios where
-     * each user session has its own DiAdapter instance.
-     *
-     * <p>Typical usage with Guice:
-     * <pre>{@code
-     * public class HomeViewProvider extends FxmlViewProvider<HomeController> {
-     *     @Inject
-     *     public HomeViewProvider(DiAdapter diAdapter) {
-     *         super(diAdapter);
-     *     }
-     * }
-     * }</pre>
+     * <p>Used for Tier 3 (isolated DI) scenarios where each user session has its own
+     * DiAdapter instance.
      *
      * @param diAdapter the DiAdapter for dependency injection (may be null for zero-config)
      */
@@ -218,9 +200,37 @@ public abstract class FxmlViewProvider<T> {
         return view != null;
     }
 
+    @Override
+    public String getFxmlResourcePath() {
+        if (cachedResourcePath == null) {
+            URL url = getFxmlUrl();
+            cachedResourcePath = FxmlPathResolver.urlToResourcePath(url);
+        }
+        return cachedResourcePath;
+    }
+
+    @Override
+    public URL getFxmlUrl() {
+        if (cachedFxmlUrl == null) {
+            cachedFxmlUrl = FxmlPathResolver.resolveFxmlUrl(getClass());
+        }
+        return cachedFxmlUrl;
+    }
+
+    /**
+     * Returns the loaded view for stylesheet refresh operations.
+     *
+     * @return the loaded view, or null if not yet loaded
+     */
+    @Override
+    public Parent getRootForStyleRefresh() {
+        return view;
+    }
+
     /**
      * Reloads the view, discarding the cached instance.
      */
+    @Override
     public void reload() {
         reload(null);
     }
@@ -231,6 +241,8 @@ public abstract class FxmlViewProvider<T> {
      * @param resources the new resource bundle, or null to keep current
      */
     public void reload(ResourceBundle resources) {
+        logger.log(Level.FINE, "Reloading FxmlViewProvider: {0}", getClass().getSimpleName());
+
         this.view = null;
         this.controller = null;
 
@@ -274,6 +286,9 @@ public abstract class FxmlViewProvider<T> {
 
         logger.log(Level.FINE, "View loaded successfully for: {0}", getClass().getName());
 
+        // Register for hot reload after successful load
+        registerForHotReload();
+
         // Hook for subclasses
         afterLoad();
     }
@@ -284,7 +299,7 @@ public abstract class FxmlViewProvider<T> {
     @SuppressWarnings("unchecked")
     private void loadWithoutDI() {
         try {
-            URL url = FxmlPathResolver.resolveFxmlUrl(getClass());
+            URL url = getFxmlUrl();
 
             FXMLLoader loader = FxmlKitLoader.createBasicLoader(url, getClass(), resources);
 
@@ -315,6 +330,17 @@ public abstract class FxmlViewProvider<T> {
 
         this.view = result.getView();
         this.controller = result.getController();
+    }
+
+    /**
+     * Registers this provider for hot reload if enabled.
+     */
+    private void registerForHotReload() {
+        if (!registeredForHotReload && HotReloadManager.getInstance().isEnabled()) {
+            HotReloadManager.getInstance().register(this);
+            registeredForHotReload = true;
+            logger.log(Level.FINE, "Registered for hot reload: {0}", getClass().getSimpleName());
+        }
     }
 
     /**

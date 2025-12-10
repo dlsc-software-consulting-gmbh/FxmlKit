@@ -1,0 +1,6 @@
+.label {
+    -fx-background-color: rgba(205, 208, 234, 0.17);
+    -fx-background-radius: 5px;
+    -fx-padding: 5px 15px;
+}
+
