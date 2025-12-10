@@ -433,7 +433,9 @@ public final class GlobalCssMonitor {
         monitoredNodes.put(node, Boolean.TRUE);
 
         // SubScene has its own UA stylesheet (not a Parent subclass, no getStylesheets())
-        if (node instanceof SubScene subScene) {
+        if (node instanceof SubScene) {
+            // Intentional: traditional instanceof for backward compatibility.
+            SubScene subScene = (SubScene) node;
             monitorSubSceneUserAgentStylesheet(subScene);
 
             Parent subRoot = subScene.getRoot();
@@ -449,11 +451,15 @@ public final class GlobalCssMonitor {
         }
 
         // Handle custom control getUserAgentStylesheet() for Regions
-        if (node instanceof Region region) {
+        if (node instanceof Region) {
+            // Intentional: traditional instanceof for backward compatibility.
+            Region region = (Region) node;
             promoteCustomUserAgentStylesheet(region);
         }
 
-        if (node instanceof Parent parent) {
+        if (node instanceof Parent) {
+            // Intentional: traditional instanceof for backward compatibility.
+            Parent parent = (Parent) node;
             // Monitor this parent's stylesheets
             registerStylesheetList(parent.getStylesheets());
 

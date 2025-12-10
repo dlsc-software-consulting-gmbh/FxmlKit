@@ -2,6 +2,8 @@ package com.dlsc.fxmlkit.hotreload;
 
 import com.dlsc.fxmlkit.fxml.FxmlDependencyAnalyzer;
 import javafx.application.Platform;
+import javafx.collections.ObservableList;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 
 import java.io.IOException;
@@ -746,7 +748,7 @@ public final class HotReloadManager {
      * Refreshes stylesheets for a Parent node and all its children.
      */
     private void refreshStylesheets(Parent root, String cssResourcePath, String sourceFileUri) {
-        var stylesheets = root.getStylesheets();
+        ObservableList<String> stylesheets = root.getStylesheets();
         for (int i = 0; i < stylesheets.size(); i++) {
             String uri = stylesheets.get(i);
             if (StylesheetUriConverter.matchesResourcePath(uri, cssResourcePath)) {
@@ -762,8 +764,10 @@ public final class HotReloadManager {
         }
 
         // Recursively refresh children
-        for (var child : root.getChildrenUnmodifiable()) {
-            if (child instanceof Parent childParent) {
+        for (Node child : root.getChildrenUnmodifiable()) {
+            if (child instanceof Parent) {
+                // Intentional: traditional instanceof for backward compatibility.
+                Parent childParent = (Parent) child;
                 refreshStylesheets(childParent, cssResourcePath, sourceFileUri);
             }
         }
