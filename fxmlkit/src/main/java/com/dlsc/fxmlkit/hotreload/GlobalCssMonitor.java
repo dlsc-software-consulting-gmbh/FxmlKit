@@ -150,6 +150,9 @@ public final class GlobalCssMonitor {
      * author-level stylesheets instead of UA-level stylesheets, which may alter
      * style cascade behavior.
      *
+     * <p><b>Note:</b> This setting requires CSS monitoring to be active. If monitoring
+     * is not started when this is enabled, a warning will be logged.
+     *
      * @param enabled true to enable (with priority change warning), false to disable
      */
     public void setControlUAHotReloadEnabled(boolean enabled) {
@@ -160,11 +163,21 @@ public final class GlobalCssMonitor {
         this.controlUAHotReloadEnabled = enabled;
 
         if (enabled) {
+            // Log the custom control UA warning
             logCustomControlUAHotReloadWarning();
+
+            // Check if monitoring is active
+            if (!monitoring) {
+                logger.log(Level.WARNING,
+                        "Control UA hot reload is enabled but CSS monitoring is not active.\n" +
+                                "  Hot reload will not work until CSS monitoring is started.\n" +
+                                "  Start CSS monitoring via:\n" +
+                                "    - FxmlKit.enableDevelopmentMode(), or\n" +
+                                "    - FxmlKit.setCssHotReloadEnabled(true)");
+            }
         }
 
-        logger.log(Level.FINE, "Custom control UA hot reload {0}",
-                enabled ? "enabled" : "disabled");
+        logger.log(Level.FINE, "Control UA hot reload {0}", enabled ? "enabled" : "disabled");
     }
 
     /**
@@ -188,22 +201,22 @@ public final class GlobalCssMonitor {
 
         logger.log(Level.WARNING,
                 "Custom control getUserAgentStylesheet() hot reload enabled.\n" +
-                "  *** WARNING: This feature changes CSS priority semantics! ***\n" +
-                "  \n" +
-                "  How it works:\n" +
-                "    Custom control User Agent Stylesheets are 'promoted' to the control's\n" +
-                "    getStylesheets() list to enable hot reload monitoring.\n" +
-                "  \n" +
-                "  Impact:\n" +
-                "    - Original: UA stylesheet has lowest priority (easily overridden)\n" +
-                "    - Promoted: Becomes author-level stylesheet (higher priority)\n" +
-                "    - This may cause custom control styles to unexpectedly override\n" +
-                "      user-defined styles or scene-level stylesheets.\n" +
-                "  \n" +
-                "  Recommendation:\n" +
-                "    - Use only during development when hot reload is needed\n" +
-                "    - Disable in production via FxmlKit.setCustomControlUAHotReloadEnabled(false)\n" +
-                "    - Test style cascade behavior if experiencing unexpected styling");
+                        "  *** WARNING: This feature changes CSS priority semantics! ***\n" +
+                        "  \n" +
+                        "  How it works:\n" +
+                        "    Custom control User Agent Stylesheets are 'promoted' to the control's\n" +
+                        "    getStylesheets() list to enable hot reload monitoring.\n" +
+                        "  \n" +
+                        "  Impact:\n" +
+                        "    - Original: UA stylesheet has lowest priority (easily overridden)\n" +
+                        "    - Promoted: Becomes author-level stylesheet (higher priority)\n" +
+                        "    - This may cause custom control styles to unexpectedly override\n" +
+                        "      user-defined styles or scene-level stylesheets.\n" +
+                        "  \n" +
+                        "  Recommendation:\n" +
+                        "    - Use only during development when hot reload is needed\n" +
+                        "    - Disable in production via FxmlKit.setCustomControlUAHotReloadEnabled(false)\n" +
+                        "    - Test style cascade behavior if experiencing unexpected styling");
     }
 
     /**
