@@ -342,44 +342,54 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
      * Loads FXML and wires DI based on the configured adapter.
      */
     private void load() {
-        logger.log(Level.FINE, "Loading view for: {0}", getClass().getName());
-
-        // Mark as loaded first to prevent re-entry
+        // Prevent re-entry (e.g., if beforeLoad() triggers another getView())
+        if (loaded) {
+            return;
+        }
         loaded = true;
 
-        // Hook for subclasses
-        beforeLoad();
+        logger.log(Level.FINE, "Loading view for: {0}", getClass().getName());
 
-        Parent loadedView;
-        T loadedController;
+        try {
+            // Hook for subclasses
+            beforeLoad();
 
-        if (diAdapter == null) {
-            // Tier 1: Zero-configuration mode
-            logger.log(Level.FINE, "Tier 1: Loading without DI (zero-config mode) for {0}",
-                    getClass().getSimpleName());
-            LoadResult<T> result = loadWithoutDI();
-            loadedView = result.view;
-            loadedController = result.controller;
-        } else {
-            // Tier 2/3: DI-enabled mode
-            logger.log(Level.FINE, "Tier 2/3: Loading with DI ({0}) for {1}",
-                    new Object[]{diAdapter.getClass().getSimpleName(), getClass().getSimpleName()});
-            FxmlKitLoader.LoadResult<T> result = loadWithDI();
-            loadedView = result.getView();
-            loadedController = result.getController();
+            Parent loadedView;
+            T loadedController;
+
+            if (diAdapter == null) {
+                // Tier 1: Zero-configuration mode
+                logger.log(Level.FINE, "Tier 1: Loading without DI (zero-config mode) for {0}",
+                        getClass().getSimpleName());
+                LoadResult<T> result = loadWithoutDI();
+                loadedView = result.view;
+                loadedController = result.controller;
+            } else {
+                // Tier 2/3: DI-enabled mode
+                logger.log(Level.FINE, "Tier 2/3: Loading with DI ({0}) for {1}",
+                        new Object[]{diAdapter.getClass().getSimpleName(), getClass().getSimpleName()});
+                FxmlKitLoader.LoadResult<T> result = loadWithDI();
+                loadedView = result.getView();
+                loadedController = result.getController();
+            }
+
+            // Update properties - triggers listeners
+            this.view.set(loadedView);
+            this.controller.set(loadedController);
+
+            logger.log(Level.FINE, "View loaded successfully for: {0}", getClass().getName());
+
+            // Register for hot reload after successful load
+            registerForHotReload();
+
+            // Hook for subclasses
+            afterLoad();
+
+        } catch (Exception e) {
+            // Reset loaded flag to allow retry after fixing the error
+            loaded = false;
+            throw e;
         }
-
-        // Update properties - triggers listeners
-        this.view.set(loadedView);
-        this.controller.set(loadedController);
-
-        logger.log(Level.FINE, "View loaded successfully for: {0}", getClass().getName());
-
-        // Register for hot reload after successful load
-        registerForHotReload();
-
-        // Hook for subclasses
-        afterLoad();
     }
 
     /**
