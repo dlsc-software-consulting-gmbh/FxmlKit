@@ -538,11 +538,14 @@ public final class FxmlKitLoader {
         }
 
         // Apply policy-based decision
-        return switch (policy) {
-            case EXPLICIT_ONLY -> false;
-            case AUTO -> hasAnyInjectPoint(cls);
-            case DISABLED -> false;
-        };
+        // Intentional: traditional if-else for backward compatibility.
+        if (policy == FxmlInjectionPolicy.EXPLICIT_ONLY) {
+            return false;
+        } else if (policy == FxmlInjectionPolicy.AUTO) {
+            return hasAnyInjectPoint(cls);
+        } else { // DISABLED
+            return false;
+        }
     }
 
     /**
@@ -816,7 +819,9 @@ public final class FxmlKitLoader {
 
                 if (nextIsFromInclude) {
                     // Only recursively collect children if this is from fx:include
-                    if (value instanceof Parent parent) {
+                    if (value instanceof Parent) {
+                        // Intentional: traditional instanceof for backward compatibility.
+                        Parent parent = (Parent) value;
                         logger.log(Level.FINE, "Recursively collecting nested nodes from <fx:include>: {0}",
                                 value.getClass().getSimpleName());
                         collectNestedNodes(parent);

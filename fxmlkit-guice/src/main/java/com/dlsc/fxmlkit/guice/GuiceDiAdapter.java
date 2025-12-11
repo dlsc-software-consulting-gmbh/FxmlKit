@@ -130,8 +130,4 @@ public class GuiceDiAdapter extends BaseDiAdapter {
         return injector;
     }
 
-    @Override
-    public String toString() {
-        return "GuiceDiAdapter{injector=" + injector + "}";
-    }
 }

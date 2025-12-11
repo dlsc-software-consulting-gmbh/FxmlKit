@@ -135,6 +135,7 @@ FXML usage:
 | Feature | Native JavaFX | FxmlKit |
 |---------|---------------|---------|
 | Hot Reload (FXML + CSS) | ❌ Restart required | ✅ Instant refresh |
+| User Agent Stylesheet Hot Reload | ❌ None | ✅ All levels (App/Scene/SubScene/Custom Control) |
 | Automatic FXML Loading | ❌ Manual loading code | ✅ Zero-config auto-loading |
 | Automatic Stylesheet Attachment | ❌ Manual code required | ✅ Auto-attach (including nested FXML) |
 | Controller Dependency Injection | ⚠️ Manual factory setup | ✅ Automatic injection |
@@ -372,6 +373,56 @@ public class MyApp extends Application {
 |-----------|----------|---------------|
 | `.fxml` | Full view reload | Lost (user input, scroll position) |
 | `.css` / `.bss` | Stylesheet refresh only | **Preserved** |
+
+**Monitored Stylesheets:**
+- Normal stylesheets (`scene.getStylesheets()`, `parent.getStylesheets()`)
+- User Agent Stylesheets (Application, Scene, SubScene levels)
+- Custom control stylesheets (`Region.getUserAgentStylesheet()` overrides)
+
+### User Agent Stylesheet Support
+
+For **Scene** and **SubScene** level User Agent Stylesheets, hot reload works automatically with native JavaFX API:
+
+```java
+scene.setUserAgentStylesheet("/styles/theme.css");  // Auto-monitored
+```
+
+For **Application** level, use FxmlKit's bridged property to enable hot reload:
+
+```java
+// ✅ Supports hot reload + property binding
+FxmlKit.setApplicationUserAgentStylesheet("/styles/dark-theme.css");
+
+// Or bind to a theme selector
+FxmlKit.applicationUserAgentStylesheetProperty()
+    .bind(themeComboBox.valueProperty());
+```
+
+Note: Using `Application.setUserAgentStylesheet()` directly still works, but won't trigger hot reload.
+
+### Custom Control User Agent Stylesheet
+
+FxmlKit automatically supports hot reload for custom controls that override `getUserAgentStylesheet()`:
+```java
+public class VersionLabel extends Label {
+    
+    @Override
+    public String getUserAgentStylesheet() {
+        return VersionLabel.class.getResource("version-label.css").toExternalForm();
+    }
+}
+```
+
+**How it works:** During development mode, FxmlKit automatically detects custom controls with overridden `getUserAgentStylesheet()` and promotes the stylesheet to `getStylesheets().add(0, ...)`. This enables hot reload monitoring while preserving the intended low-priority behavior (index 0 = lowest priority among author stylesheets).
+
+**Priority note:** This promotion slightly changes CSS specificity semantics — the stylesheet becomes an "author stylesheet" instead of a true "user agent stylesheet". In practice, this rarely causes issues since:
+- The stylesheet is added at index 0 (lowest priority)
+- This only affects development mode
+- Production builds use the native UA stylesheet mechanism
+
+If you encounter styling conflicts during development, you have two options:
+- Increase selector specificity in your custom control's CSS
+- Temporarily remove the `getUserAgentStylesheet()` override and add the stylesheet to `getStylesheets()` instead. Once development is complete, reverse this change to restore the proper UA stylesheet behavior.
 
 ### Fine-Grained Control
 
@@ -781,6 +832,7 @@ tier1/
 ├── i18n/           # Internationalization example
 ├── provider/       # FxmlViewProvider usage examples
 └── viewpath/       # Custom FXML path
+└── theme/          # User Agent Stylesheet hot reload (Application level + Custom Control)
 ```
 
 ### Tier 2 - Optional Dependency Injection

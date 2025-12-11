@@ -1,0 +1,18 @@
+
+.content-pane {
+    -fx-background-color: -fx-background;
+    -fx-spacing: 20px;
+    -fx-pref-width: 400px;
+    -fx-pref-height: 300px;
+    -fx-alignment: center;
+    -fx-padding: 30px;
+}
+
+.theme-box {
+    -fx-alignment: center;
+    -fx-spacing: 15px;
+}
+
+.info-label {
+    /*-fx-font-size: 1.2em;*/
+}

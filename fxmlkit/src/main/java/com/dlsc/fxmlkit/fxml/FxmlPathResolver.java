@@ -245,22 +245,6 @@ public final class FxmlPathResolver {
     }
 
     /**
-     * Auto-attaches stylesheet for a single FXML file.
-     *
-     * <p>This is the legacy method kept for backward compatibility. For new code,
-     * prefer {@link #autoAttachStylesheets(Parent, URL)} which handles nested includes.
-     *
-     * @param root    the root node to attach stylesheet to (must not be null)
-     * @param fxmlUrl the FXML file URL used to locate CSS in same directory
-     * @return true if a stylesheet was attached, false otherwise
-     * @deprecated Use {@link #autoAttachStylesheets(Parent, URL)} instead
-     */
-    @Deprecated
-    public static boolean autoAttachStylesheet(Parent root, URL fxmlUrl) {
-        return autoAttachStylesheetForSingleFxml(root, fxmlUrl);
-    }
-
-    /**
      * Auto-attaches stylesheet for a single FXML file with optimization.
      */
     private static boolean autoAttachStylesheetForSingleFxml(Parent root, URL fxmlUrl) {

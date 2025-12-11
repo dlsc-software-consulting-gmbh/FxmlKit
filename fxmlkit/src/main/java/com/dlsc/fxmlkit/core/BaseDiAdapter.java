@@ -125,8 +125,4 @@ public abstract class BaseDiAdapter implements DiAdapter {
         // Subclasses override if they have separate member injection
     }
 
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{}";
-    }
 }

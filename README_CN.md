@@ -135,6 +135,7 @@ public class StatusCard extends VBox {
 | 功能 | JavaFX 原生 | FxmlKit |
 |------|------------|---------|
 | 热更新（FXML + CSS） | ❌ 需要重启应用 | ✅ 即刻刷新 |
+| User Agent Stylesheet 热更新 | ❌ 无 | ✅ 全部级别（Application/Scene/SubScene/自定义控件） |
 | FXML 自动加载 | ❌ 手动编写加载代码 | ✅ 零配置自动加载 |
 | 样式表自动附加 | ❌ 手动代码附加 | ✅ 自动附加（含嵌套 FXML） |
 | 控制器依赖注入 | ⚠️ 需手动配置工厂 | ✅ 自动注入 |
@@ -372,6 +373,56 @@ public class MyApp extends Application {
 |----------|------|------------|
 | `.fxml` | 完整视图重载 | 丢失（用户输入、滚动位置） |
 | `.css` / `.bss` | 仅刷新样式表 | **保留** |
+
+**监控的样式表类型：**
+- 普通样式表（`scene.getStylesheets()`、`parent.getStylesheets()`）
+- User Agent Stylesheet（Application、Scene、SubScene 三级）
+- 自定义控件样式表（`Region.getUserAgentStylesheet()` 重写）
+
+### User Agent Stylesheet 支持
+
+对于 **Scene** 和 **SubScene** 级别的 User Agent Stylesheet，使用原生 JavaFX API 即可自动监控：
+
+```java
+scene.setUserAgentStylesheet("/styles/theme.css");  // 自动监控
+```
+
+对于 **Application** 级别，需使用 FxmlKit 的桥接属性以启用热更新：
+
+```java
+// ✅ 支持热更新 + 属性绑定
+FxmlKit.setApplicationUserAgentStylesheet("/styles/dark-theme.css");
+
+// 或绑定到主题选择器
+FxmlKit.applicationUserAgentStylesheetProperty()
+    .bind(themeComboBox.valueProperty());
+```
+
+注意：直接使用 `Application.setUserAgentStylesheet()` 仍然可以工作，但不会触发热更新。
+
+### 自定义控件 User Agent Stylesheet
+
+FxmlKit 自动支持重写了 `getUserAgentStylesheet()` 的自定义控件的热更新：
+```java
+public class VersionLabel extends Label {
+    
+    @Override
+    public String getUserAgentStylesheet() {
+        return VersionLabel.class.getResource("version-label.css").toExternalForm();
+    }
+}
+```
+
+**实现原理：** 在开发模式下，FxmlKit 自动检测重写了 `getUserAgentStylesheet()` 的自定义控件，并将样式表提升到 `getStylesheets().add(0, ...)`。这样既能启用热更新监控，又能保持预期的低优先级行为（索引 0 = 作者样式表中最低优先级）。
+
+**优先级说明：** 这种提升会轻微改变 CSS 优先级语义 —— 样式表从"用户代理样式表"变成了"作者样式表"。实际使用中这很少造成问题，因为：
+- 样式表添加在索引 0（最低优先级）
+- 仅在开发模式下生效
+- 生产环境使用原生 UA 样式表机制
+
+如果在开发过程中遇到样式冲突，有两种解决方案：
+- 提高自定义控件 CSS 中选择器的优先级
+- 临时移除 `getUserAgentStylesheet()` 重写，改为将样式表添加到 `getStylesheets()` 中。开发完成后再还原，恢复正确的 UA 样式表行为。
 
 ### 精细控制
 
@@ -775,6 +826,7 @@ tier1/
 ├── i18n/           # 国际化示例
 ├── provider/       # FxmlViewProvider 使用示例
 └── viewpath/       # 自定义 FXML 路径
+└── theme/          # User Agent Stylesheet 热更新（Application 级别 + 自定义控件）
 ```
 
 ### Tier 2 - 可选依赖注入
