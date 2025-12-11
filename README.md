@@ -83,8 +83,6 @@ In traditional approaches, custom components declared in FXML are directly insta
 
 Controller auto-injection:
 ```java
-import javax.inject.Inject;  // Standard JSR-330 annotation
-
 public class LoginController {
     @Inject private UserService userService;
     

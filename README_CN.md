@@ -83,8 +83,6 @@ public class LoginView extends FxmlView<LoginController> {
 
 控制器自动注入：
 ```java
-import javax.inject.Inject;  // 标准 JSR-330 注解
-
 public class LoginController {
     @Inject private UserService userService;
     
