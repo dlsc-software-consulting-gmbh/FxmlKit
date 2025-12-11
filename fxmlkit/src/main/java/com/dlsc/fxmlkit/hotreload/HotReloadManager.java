@@ -78,7 +78,7 @@ import java.util.logging.Logger;
  *     ↓
  * WatchService Thread
  *     ↓
- * Debounce Check (300ms window)
+ * Debounce Check (configurable, default 500ms)
  *     ↓
  * Dependency Analysis (BFS for fx:include / CSS mapping)
  *     ↓
@@ -102,9 +102,15 @@ public final class HotReloadManager {
     private static final HotReloadManager INSTANCE = new HotReloadManager();
 
     /**
-     * Debounce window in milliseconds.
+     * Default debounce window in milliseconds.
      */
-    private static final long DEBOUNCE_MILLIS = 300;
+    private static final long DEFAULT_DEBOUNCE_MILLIS = 500;
+
+    /**
+     * Configurable debounce window in milliseconds.
+     * Prevents duplicate reloads when editors trigger multiple file events.
+     */
+    private volatile long debounceMillis = DEFAULT_DEBOUNCE_MILLIS;
 
     /**
      * Whether FXML hot reload is enabled.
@@ -263,6 +269,37 @@ public final class HotReloadManager {
      */
     public boolean isCssHotReloadEnabled() {
         return cssHotReloadEnabled;
+    }
+
+    /**
+     * Sets the debounce time for hot reload events.
+     *
+     * <p>The debounce window prevents duplicate reloads when editors or IDEs
+     * trigger multiple file system events for a single save operation.
+     *
+     * <p>Increase this value if you experience duplicate reloads (e.g., to 1000-2000ms).
+     * Decrease for faster feedback if your system handles it well.
+     *
+     * <p>Default: 500ms
+     *
+     * @param millis the debounce time in milliseconds (must be positive)
+     * @throws IllegalArgumentException if millis is not positive
+     */
+    public void setDebounceMillis(long millis) {
+        if (millis <= 0) {
+            throw new IllegalArgumentException("Debounce time must be positive: " + millis);
+        }
+        this.debounceMillis = millis;
+        logger.log(Level.FINE, "Hot reload debounce set to {0}ms", millis);
+    }
+
+    /**
+     * Returns the current debounce time for hot reload events.
+     *
+     * @return the debounce time in milliseconds
+     */
+    public long getDebounceMillis() {
+        return debounceMillis;
     }
 
     /**
@@ -1070,7 +1107,7 @@ public final class HotReloadManager {
         long now = System.currentTimeMillis();
         Long lastTime = lastReloadTime.get(resourcePath);
 
-        if (lastTime != null && (now - lastTime) < DEBOUNCE_MILLIS) {
+        if (lastTime != null && (now - lastTime) < debounceMillis) {
             return false;
         }
 
@@ -1084,6 +1121,7 @@ public final class HotReloadManager {
     public synchronized void reset() {
         fxmlHotReloadEnabled = false;
         cssHotReloadEnabled = false;
+        debounceMillis = DEFAULT_DEBOUNCE_MILLIS;
         stopWatchService();
         globalCssMonitor.stopMonitoring();
         cachedProjectRoot = null;

@@ -63,8 +63,13 @@ public final class FxmlKit {
      *
      * <p>CSS hot reload covers all stylesheet types including User Agent Stylesheets.
      *
+     * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload is
+     * disabled by default due to style priority changes. Enable separately via
+     * {@link #setControlUAHotReloadEnabled(boolean)} if needed.
+     *
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
+     * @see #setControlUAHotReloadEnabled(boolean)
      */
     public static void enableDevelopmentMode() {
         setFxmlHotReloadEnabled(true);
@@ -106,6 +111,9 @@ public final class FxmlKit {
      *   <li>User Agent Stylesheets (Application, Scene, SubScene)</li>
      * </ul>
      *
+     * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload
+     * requires separate enablement via {@link #setControlUAHotReloadEnabled(boolean)}.
+     *
      * @param enabled true to enable, false to disable
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
@@ -119,6 +127,80 @@ public final class FxmlKit {
      */
     public static boolean isCssHotReloadEnabled() {
         return HotReloadManager.getInstance().isCssHotReloadEnabled();
+    }
+
+    /**
+     * Enables or disables hot reload for Control {@code getUserAgentStylesheet()}.
+     *
+     * <p><b>Warning:</b> Enabling this feature changes CSS priority semantics!
+     *
+     * <p>To support hot reload, custom control User Agent Stylesheets are "promoted"
+     * to the control's {@code getStylesheets()} list. This causes them to become
+     * author-level stylesheets instead of UA-level stylesheets, which may alter
+     * style cascade behavior:
+     * <ul>
+     *   <li>Original UA stylesheet: lowest priority, easily overridden</li>
+     *   <li>Promoted stylesheet: author-level priority, may override user styles</li>
+     * </ul>
+     *
+     * <p><b>Recommendation:</b> Only enable during development for controls that
+     * need hot reload. Keep disabled in production or when style priority matters.
+     *
+     * <p>Default: disabled
+     *
+     * @param enabled true to enable (with priority change warning), false to disable
+     * @see #isControlUAHotReloadEnabled()
+     */
+    public static void setControlUAHotReloadEnabled(boolean enabled) {
+        HotReloadManager.getInstance().getGlobalCssMonitor().setControlUAHotReloadEnabled(enabled);
+    }
+
+    /**
+     * Returns whether Control {@code getUserAgentStylesheet()} hot reload is enabled.
+     *
+     * @return true if enabled
+     * @see #setControlUAHotReloadEnabled(boolean)
+     */
+    public static boolean isControlUAHotReloadEnabled() {
+        return HotReloadManager.getInstance().getGlobalCssMonitor().isControlUAHotReloadEnabled();
+    }
+
+    /**
+     * Sets the debounce time for hot reload events.
+     *
+     * <p>The debounce window prevents duplicate reloads when editors or IDEs
+     * trigger multiple file system events for a single save operation. Some editors
+     * (especially on certain operating systems) may trigger 2-3 events per save.
+     *
+     * <p>Adjust this value based on your development environment:
+     * <ul>
+     *   <li>If experiencing duplicate reloads: increase to 1000-2000ms</li>
+     *   <li>If reload feels sluggish: decrease (minimum ~200ms recommended)</li>
+     * </ul>
+     *
+     * <p>Default: 500ms
+     *
+     * <pre>{@code
+     * // Example: increase debounce for slower systems
+     * FxmlKit.setHotReloadDebounceMillis(1500);
+     * }</pre>
+     *
+     * @param millis the debounce time in milliseconds (must be positive)
+     * @throws IllegalArgumentException if millis is not positive
+     * @see #getHotReloadDebounceMillis()
+     */
+    public static void setHotReloadDebounceMillis(long millis) {
+        HotReloadManager.getInstance().setDebounceMillis(millis);
+    }
+
+    /**
+     * Returns the current debounce time for hot reload events.
+     *
+     * @return the debounce time in milliseconds
+     * @see #setHotReloadDebounceMillis(long)
+     */
+    public static long getHotReloadDebounceMillis() {
+        return HotReloadManager.getInstance().getDebounceMillis();
     }
 
     /**

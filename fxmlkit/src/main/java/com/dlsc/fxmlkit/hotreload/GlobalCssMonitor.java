@@ -44,7 +44,9 @@ import java.util.logging.Logger;
  *
  * <p>For custom controls that override {@code getUserAgentStylesheet()}, the stylesheet
  * is automatically promoted to the control's {@code getStylesheets()} list (at index 0)
- * during development mode to enable hot reload monitoring.
+ * during development mode to enable hot reload monitoring. This feature is controlled
+ * by a separate switch ({@link #setControlUAHotReloadEnabled(boolean)}) due to
+ * style priority implications.
  *
  * @see HotReloadManager
  */
@@ -98,6 +100,18 @@ public final class GlobalCssMonitor {
     private volatile boolean monitoring = false;
 
     /**
+     * Whether control getUserAgentStylesheet() hot reload is enabled.
+     * Default: false (disabled due to style priority implications)
+     */
+    private volatile boolean controlUAHotReloadEnabled = false;
+
+    /**
+     * Whether the warning about custom control UA hot reload has been logged.
+     * Used to prevent duplicate warnings.
+     */
+    private volatile boolean customControlUAWarningLogged = false;
+
+    /**
      * Tracks monitored scenes. Uses WeakHashMap so scenes can be garbage collected.
      */
     private final Map<Scene, Boolean> monitoredScenes = new WeakHashMap<>();
@@ -124,6 +138,72 @@ public final class GlobalCssMonitor {
 
     public GlobalCssMonitor() {
         setupApplicationUserAgentStylesheetBridge();
+    }
+
+    /**
+     * Enables or disables hot reload for Control {@code getUserAgentStylesheet()}.
+     *
+     * <p><b>Warning:</b> Enabling this feature changes CSS priority semantics!
+     *
+     * <p>To support hot reload, custom control User Agent Stylesheets are "promoted"
+     * to the control's {@code getStylesheets()} list. This causes them to become
+     * author-level stylesheets instead of UA-level stylesheets, which may alter
+     * style cascade behavior.
+     *
+     * @param enabled true to enable (with priority change warning), false to disable
+     */
+    public void setControlUAHotReloadEnabled(boolean enabled) {
+        if (this.controlUAHotReloadEnabled == enabled) {
+            return;
+        }
+
+        this.controlUAHotReloadEnabled = enabled;
+
+        if (enabled) {
+            logCustomControlUAHotReloadWarning();
+        }
+
+        logger.log(Level.FINE, "Custom control UA hot reload {0}",
+                enabled ? "enabled" : "disabled");
+    }
+
+    /**
+     * Returns whether Control {@code getUserAgentStylesheet()} hot reload is enabled.
+     *
+     * @return true if enabled
+     */
+    public boolean isControlUAHotReloadEnabled() {
+        return controlUAHotReloadEnabled;
+    }
+
+    /**
+     * Logs a warning about the style priority implications of enabling
+     * custom control getUserAgentStylesheet() hot reload.
+     */
+    private void logCustomControlUAHotReloadWarning() {
+        if (customControlUAWarningLogged) {
+            return;
+        }
+        customControlUAWarningLogged = true;
+
+        logger.log(Level.WARNING,
+                "Custom control getUserAgentStylesheet() hot reload enabled.\n" +
+                "  *** WARNING: This feature changes CSS priority semantics! ***\n" +
+                "  \n" +
+                "  How it works:\n" +
+                "    Custom control User Agent Stylesheets are 'promoted' to the control's\n" +
+                "    getStylesheets() list to enable hot reload monitoring.\n" +
+                "  \n" +
+                "  Impact:\n" +
+                "    - Original: UA stylesheet has lowest priority (easily overridden)\n" +
+                "    - Promoted: Becomes author-level stylesheet (higher priority)\n" +
+                "    - This may cause custom control styles to unexpectedly override\n" +
+                "      user-defined styles or scene-level stylesheets.\n" +
+                "  \n" +
+                "  Recommendation:\n" +
+                "    - Use only during development when hot reload is needed\n" +
+                "    - Disable in production via FxmlKit.setCustomControlUAHotReloadEnabled(false)\n" +
+                "    - Test style cascade behavior if experiencing unexpected styling");
     }
 
     /**
@@ -246,6 +326,8 @@ public final class GlobalCssMonitor {
         monitoring = false;
         projectRoot = null;
         applicationUAResourcePath = null;
+        // Reset warning flag so it can be logged again if re-enabled
+        customControlUAWarningLogged = false;
 
         Platform.runLater(() -> {
             if (windowListListener != null) {
@@ -451,7 +533,8 @@ public final class GlobalCssMonitor {
         }
 
         // Handle custom control getUserAgentStylesheet() for Regions
-        if (node instanceof Region) {
+        // Only if the feature is enabled
+        if (node instanceof Region && controlUAHotReloadEnabled) {
             // Intentional: traditional instanceof for backward compatibility.
             Region region = (Region) node;
             promoteCustomUserAgentStylesheet(region);
@@ -490,6 +573,9 @@ public final class GlobalCssMonitor {
      *
      * <p><b>Development mode only:</b> This slightly changes CSS priority semantics
      * (UA becomes author-level), but enables hot reload which is more valuable during development.
+     *
+     * <p><b>Note:</b> This method is only called when {@link #controlUAHotReloadEnabled}
+     * is true. The feature is disabled by default due to style priority implications.
      *
      * @param region the Region to check and promote
      */

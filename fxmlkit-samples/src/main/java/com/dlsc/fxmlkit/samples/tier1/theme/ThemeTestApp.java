@@ -37,6 +37,7 @@ public class ThemeTestApp extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         FxmlKit.enableDevelopmentMode();
+        FxmlKit.setControlUAHotReloadEnabled(true);
 
         Scene scene = new Scene(new ThemeTestView());
 
