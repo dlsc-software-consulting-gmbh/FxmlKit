@@ -153,6 +153,13 @@ FXML usage:
 
 ## Quick Start
 
+### Requirements
+
+- **Java:** 11 or higher
+- **JavaFX:** 11 or higher (17+ recommended)
+
+FxmlKit targets Java 11 as the minimum version, ensuring wide compatibility while supporting modern JavaFX features.
+
 ### Installation
 
 **Maven:**
@@ -344,6 +351,53 @@ LoginView view = new LoginView(new GuiceDiAdapter(userInjector));
 
 ---
 
+### Reactive Controller API
+
+FxmlKit exposes controllers and views as JavaFX properties, enabling reactive programming patterns. This is especially useful with hot reload to automatically update UI when controllers change.
+
+**With FxmlView (eager loading):**
+```java
+MainView view = new MainView();
+
+// Access controller directly (returns null only if FXML has no fx:controller)
+MainController controller = view.getController();
+
+// React to controller changes (e.g., during hot reload)
+view.controllerProperty().addListener((obs, oldController, newController) -> {
+    if (newController != null) {
+        newController.refreshData();  // Re-initialize on hot reload
+    }
+});
+```
+
+**With FxmlViewProvider (lazy loading):**
+```java
+MainViewProvider provider = new MainViewProvider();
+
+// Controller is null until getView() is called
+MainController controller = provider.getController();  // null - not loaded yet
+
+// React to controller changes
+provider.controllerProperty().addListener((obs, oldCtrl, newCtrl) -> {
+    if (newCtrl != null) {
+        newCtrl.loadData();
+    }
+});
+
+// Trigger lazy loading
+Parent view = provider.getView();  // Now FXML is loaded
+controller = provider.getController();  // Now returns the controller
+```
+
+**Benefits:**
+- ✅ Automatically respond to hot reload events
+- ✅ Seamless integration with JavaFX property binding
+- ✅ Cleaner code compared to manual reload handling
+
+**Note:** With `FxmlView`, the FXML is loaded immediately in the constructor, so `getController()` always returns the controller (or null if FXML has no `fx:controller` attribute). With `FxmlViewProvider`, the FXML is loaded lazily when `getView()` is first called, so `getController()` returns null until then.
+
+---
+
 ## Hot Reload
 
 FxmlKit provides built-in hot reload for rapid UI development. Edit your FXML or CSS files and see changes instantly without restarting.
@@ -398,9 +452,10 @@ FxmlKit.applicationUserAgentStylesheetProperty()
 
 Note: Using `Application.setUserAgentStylesheet()` directly still works, but won't trigger hot reload.
 
+
 ### Custom Control User Agent Stylesheet
 
-FxmlKit automatically supports hot reload for custom controls that override `getUserAgentStylesheet()`:
+FxmlKit supports hot reload for custom controls that override `getUserAgentStylesheet()`, but **this feature is opt-in** due to CSS priority implications:
 ```java
 public class VersionLabel extends Label {
     
@@ -411,16 +466,29 @@ public class VersionLabel extends Label {
 }
 ```
 
-**How it works:** During development mode, FxmlKit automatically detects custom controls with overridden `getUserAgentStylesheet()` and promotes the stylesheet to `getStylesheets().add(0, ...)`. This enables hot reload monitoring while preserving the intended low-priority behavior (index 0 = lowest priority among author stylesheets).
+**Enable custom control UA hot reload:**
+```java
+// Option 1: Enable development mode (FXML + CSS hot reload)
+FxmlKit.enableDevelopmentMode();
+FxmlKit.setControlUAHotReloadEnabled(true);
 
-**Priority note:** This promotion slightly changes CSS specificity semantics — the stylesheet becomes an "author stylesheet" instead of a true "user agent stylesheet". In practice, this rarely causes issues since:
-- The stylesheet is added at index 0 (lowest priority)
-- This only affects development mode
-- Production builds use the native UA stylesheet mechanism
+// Option 2: Enable CSS hot reload only
+FxmlKit.setCssHotReloadEnabled(true);
+FxmlKit.setControlUAHotReloadEnabled(true);
+```
 
-If you encounter styling conflicts during development, you have two options:
-- Increase selector specificity in your custom control's CSS
-- Temporarily remove the `getUserAgentStylesheet()` override and add the stylesheet to `getStylesheets()` instead. Once development is complete, reverse this change to restore the proper UA stylesheet behavior.
+**⚠️ Prerequisites:**
+- Control UA hot reload requires CSS monitoring to be active
+- Enable CSS hot reload via `enableDevelopmentMode()` or `setCssHotReloadEnabled(true)` first
+
+**How it works:** When enabled, FxmlKit automatically detects custom controls with overridden `getUserAgentStylesheet()` and promotes the stylesheet to `getStylesheets().add(0, ...)` for monitoring. The stylesheet is added at index 0 (lowest priority among author stylesheets) to approximate the original low-priority behavior.
+
+**⚠️ Why opt-in?** This promotion changes CSS cascade semantics — the stylesheet becomes an "author stylesheet" instead of a true "user agent stylesheet". This may cause custom control styles to unexpectedly override user-defined or scene-level stylesheets in some cases.
+
+**Recommendation:**
+- Only enable during development when you need to edit custom control stylesheets
+- Disable in production: `FxmlKit.setControlUAHotReloadEnabled(false)`
+- Test your styling if you experience unexpected style conflicts
 
 ### Fine-Grained Control
 
@@ -431,6 +499,12 @@ FxmlKit.setFxmlHotReloadEnabled(true);
 // Enable only CSS hot reload
 FxmlKit.setCssHotReloadEnabled(true);
 
+// Enable control UA stylesheet hot reload (opt-in, requires CSS hot reload)
+FxmlKit.setControlUAHotReloadEnabled(true);
+
+// Configure hot reload debounce time (default: 500ms)
+FxmlKit.setHotReloadDebounceMillis(2000);  // Increase if experiencing duplicate reloads
+
 // Enable both (equivalent to enableDevelopmentMode())
 FxmlKit.setFxmlHotReloadEnabled(true);
 FxmlKit.setCssHotReloadEnabled(true);
@@ -438,6 +512,9 @@ FxmlKit.setCssHotReloadEnabled(true);
 // Disable all
 FxmlKit.disableDevelopmentMode();
 ```
+
+**About Debounce:**  
+The debounce window prevents duplicate reloads when editors or IDEs trigger multiple file system events for a single save. If you experience duplicate reloads, increase the debounce time (e.g., to 1500-3000ms). If reload feels sluggish, decrease it (minimum ~200ms recommended).
 
 ### Using with CSSFX
 
