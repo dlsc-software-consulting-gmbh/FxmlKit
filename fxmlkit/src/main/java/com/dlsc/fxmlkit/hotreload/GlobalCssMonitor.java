@@ -63,9 +63,9 @@ public final class GlobalCssMonitor {
 
     /**
      * Resource path of the current Application UA stylesheet.
-     * Volatile: read by WatchService thread in refreshStylesheet().
+     * Accessed only from JavaFX Application Thread.
      */
-    private volatile String applicationUAResourcePath;
+    private String applicationUAResourcePath;
 
     /**
      * Maps resource paths to Scenes using them as UA stylesheet.
@@ -103,13 +103,13 @@ public final class GlobalCssMonitor {
      * Whether control getUserAgentStylesheet() hot reload is enabled.
      * Default: false (disabled due to style priority implications)
      */
-    private volatile boolean controlUAHotReloadEnabled = false;
+    private boolean controlUAHotReloadEnabled = false;
 
     /**
      * Whether the warning about custom control UA hot reload has been logged.
      * Used to prevent duplicate warnings.
      */
-    private volatile boolean customControlUAWarningLogged = false;
+    private boolean customControlUAWarningLogged = false;
 
     /**
      * Tracks monitored scenes. Uses WeakHashMap so scenes can be garbage collected.

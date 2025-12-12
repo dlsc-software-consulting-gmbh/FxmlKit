@@ -9,10 +9,10 @@ import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 import javafx.beans.property.StringProperty;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -32,13 +32,13 @@ public final class FxmlKit {
 
     private static final String ROOT_PACKAGE_NAME = "com.dlsc.fxmlkit";
 
-    private static volatile Level globalLogLevel = Level.WARNING;
-    private static volatile DiAdapter globalDiAdapter = null;
-    private static volatile boolean autoAttachStyles = true;
-    private static volatile FxmlInjectionPolicy fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
+    private static Level globalLogLevel = Level.WARNING;
+    private static DiAdapter globalDiAdapter = null;
+    private static boolean autoAttachStyles = true;
+    private static FxmlInjectionPolicy fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
 
-    private static final Set<Class<?>> INCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
-    private static final Set<Class<?>> EXCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
+    private static final Set<Class<?>> INCLUDE_NODE_TYPES = new HashSet<>();
+    private static final Set<Class<?>> EXCLUDE_NODE_TYPES = new HashSet<>();
 
     private static final List<String> DEFAULT_SKIP_PACKAGE_PREFIXES = List.of(
             "java.",
