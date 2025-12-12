@@ -1,7 +1,6 @@
 package com.dlsc.fxmlkit.hotreload;
 
 import java.net.URI;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -81,57 +80,6 @@ public final class StylesheetUriConverter {
                     new Object[]{uri, e.getMessage()});
             return null;
         }
-    }
-
-    /**
-     * Finds the source file corresponding to a resource path.
-     *
-     * @param resourcePath the resource path (e.g., "com/example/app.css")
-     * @param projectRoot  the project root directory
-     * @return the source file path, or null if not found
-     */
-    public static Path findSourceFile(String resourcePath, Path projectRoot) {
-        if (resourcePath == null || projectRoot == null) {
-            return null;
-        }
-
-        // Try all source locations
-        for (String sourceDir : BuildSystem.getSourcePaths()) {
-            Path sourcePath = projectRoot.resolve(sourceDir).resolve(resourcePath);
-            if (Files.exists(sourcePath)) {
-                return sourcePath;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Converts a classpath URI to a file:// URI pointing to the source file.
-     *
-     * <p>This is the key to making hot reload work - JavaFX caches stylesheets
-     * by URI, so we need to switch from classpath to file:// to see changes.
-     *
-     * @param originalUri the original stylesheet URI
-     * @param projectRoot the project root directory
-     * @return the file:// URI, or null if source file not found
-     */
-    public static String toSourceFileUri(String originalUri, Path projectRoot) {
-        if (projectRoot == null) {
-            return null;
-        }
-
-        String resourcePath = toResourcePath(originalUri);
-        if (resourcePath == null) {
-            return null;
-        }
-
-        Path sourceFile = findSourceFile(resourcePath, projectRoot);
-        if (sourceFile != null) {
-            return sourceFile.toUri().toString();
-        }
-
-        return null;
     }
 
     /**
