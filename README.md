@@ -155,21 +155,18 @@ FXML usage:
 
 ### Requirements
 
-- **Java:** 11 or higher (17.0.4+ recommended)
+- **Java:** 11 or higher
 - **JavaFX:** 11 or higher (17+ recommended)
 
 #### Hot Reload Performance Note
 
 FxmlKit uses Java's built-in `WatchService` for FXML/CSS hot reload. Performance varies across operating systems:
 
-| OS | Java Version | File Change Detection Delay |
-|----|--------------|----------------------------|
-| Windows | 11+ | Near-instant |
-| Linux | 11+ | Near-instant |
-| macOS | 11 ~ 17.0.3 | ~10 seconds |
-| macOS | 17.0.4+ | ~2 seconds |
-
-> **Note:** For compatibility, the Java version in pom.xml is set to 11. macOS users running fxmlkit-samples demos should upgrade to JDK 17.0.4 or higher for a better hot reload experience.
+| OS | Java Version | File Change Detection Delay | Note |
+|----|--------------|----------------------------|------|
+| Windows | 11+ | Near-instant | Native file system events |
+| Linux | 11+ | Near-instant | Native file system events |
+| macOS | 11+ | ~2 seconds | FxmlKit optimized |
 
 ### Installation
 
