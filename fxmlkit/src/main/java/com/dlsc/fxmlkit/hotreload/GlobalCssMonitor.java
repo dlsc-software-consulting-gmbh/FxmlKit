@@ -455,16 +455,16 @@ public final class GlobalCssMonitor {
     private void registerSceneUserAgentStylesheet(String uri, Scene scene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            List<WeakReference<Scene>> owners = 
+            List<WeakReference<Scene>> owners =
                     sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>());
-            
+
             // Check if already registered
             for (WeakReference<Scene> ref : owners) {
                 if (ref.get() == scene) {
                     return;  // Already registered
                 }
             }
-            
+
             owners.add(new WeakReference<>(scene));
             logger.log(Level.FINE, "Registered Scene UA stylesheet: {0}", resourcePath);
         }
@@ -504,16 +504,16 @@ public final class GlobalCssMonitor {
     private void registerSubSceneUserAgentStylesheet(String uri, SubScene subScene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            List<WeakReference<SubScene>> owners = 
+            List<WeakReference<SubScene>> owners =
                     subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>());
-            
+
             // Check if already registered
             for (WeakReference<SubScene> ref : owners) {
                 if (ref.get() == subScene) {
                     return;  // Already registered
                 }
             }
-            
+
             owners.add(new WeakReference<>(subScene));
             logger.log(Level.FINE, "Registered SubScene UA stylesheet: {0}", resourcePath);
         }
@@ -709,16 +709,16 @@ public final class GlobalCssMonitor {
             return;
         }
 
-        List<WeakReference<ObservableList<String>>> owners = 
+        List<WeakReference<ObservableList<String>>> owners =
                 stylesheetOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>());
-        
+
         // Check if this owner is already registered (prevent duplicates)
         for (WeakReference<ObservableList<String>> ref : owners) {
             if (ref.get() == owner) {
                 return;  // Already registered, skip
             }
         }
-        
+
         owners.add(new WeakReference<>(owner));
         logger.log(Level.FINE, "Registered stylesheet: {0}", resourcePath);
     }
@@ -763,9 +763,8 @@ public final class GlobalCssMonitor {
      * Refreshes normal stylesheets (Scene and Parent level).
      * Skips stale WeakReferences during iteration.
      *
-     * <p>Uses timestamp query parameter to force JavaFX to reload the stylesheet.
-     * JavaFX's StyleManager caches stylesheets by URI string, so we must use
-     * a unique URI each time to bypass the cache.
+     * <p>Uses remove-add strategy to force JavaFX to reload the stylesheet.
+     * This approach is compatible with other CSS monitoring tools like CSSFX.
      */
     private int refreshNormalStylesheets(String resourcePath, String sourceFileUri) {
         List<WeakReference<ObservableList<String>>> owners = stylesheetOwners.get(resourcePath);
@@ -774,7 +773,6 @@ public final class GlobalCssMonitor {
         }
 
         int refreshCount = 0;
-        long timestamp = System.currentTimeMillis();
 
         for (WeakReference<ObservableList<String>> ref : owners) {
             ObservableList<String> stylesheets = ref.get();
@@ -786,11 +784,9 @@ public final class GlobalCssMonitor {
             for (int i = 0; i < stylesheets.size(); i++) {
                 String uri = stylesheets.get(i);
                 if (StylesheetUriConverter.matchesResourcePath(uri, resourcePath)) {
-                    // Strip existing timestamp and add new one to bust cache
-                    String baseUri = StylesheetUriConverter.stripTimestamp(uri);
-                    String newUri = baseUri + "?t=" + timestamp;
+                    // Remove and re-add to force reload
                     stylesheets.remove(i);
-                    stylesheets.add(i, newUri);
+                    stylesheets.add(i, uri);
                     refreshCount++;
                 }
             }
@@ -803,7 +799,7 @@ public final class GlobalCssMonitor {
      * Refreshes Scene-level User Agent Stylesheets.
      * Skips stale WeakReferences during iteration.
      *
-     * <p>Uses timestamp to force JavaFX to reload the stylesheet.
+     * <p>Uses null-set strategy to force JavaFX to reload the stylesheet.
      */
     private int refreshSceneUserAgentStylesheets(String resourcePath, String sourceFileUri) {
         List<WeakReference<Scene>> owners = sceneUAOwners.get(resourcePath);
@@ -812,7 +808,6 @@ public final class GlobalCssMonitor {
         }
 
         int refreshCount = 0;
-        long timestamp = System.currentTimeMillis();
 
         for (WeakReference<Scene> ref : owners) {
             Scene scene = ref.get();
@@ -822,11 +817,9 @@ public final class GlobalCssMonitor {
 
             String currentUri = scene.getUserAgentStylesheet();
             if (StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
-                // Strip existing timestamp and add new one
-                String baseUri = StylesheetUriConverter.stripTimestamp(currentUri);
-                String newUri = baseUri + "?t=" + timestamp;
+                // Set to null then restore to force reload
                 scene.setUserAgentStylesheet(null);
-                scene.setUserAgentStylesheet(newUri);
+                scene.setUserAgentStylesheet(currentUri);
                 refreshCount++;
             }
         }
@@ -838,7 +831,7 @@ public final class GlobalCssMonitor {
      * Refreshes SubScene-level User Agent Stylesheets.
      * Skips stale WeakReferences during iteration.
      *
-     * <p>Uses timestamp to force JavaFX to reload the stylesheet.
+     * <p>Uses null-set strategy to force JavaFX to reload the stylesheet.
      */
     private int refreshSubSceneUserAgentStylesheets(String resourcePath, String sourceFileUri) {
         List<WeakReference<SubScene>> owners = subSceneUAOwners.get(resourcePath);
@@ -847,7 +840,6 @@ public final class GlobalCssMonitor {
         }
 
         int refreshCount = 0;
-        long timestamp = System.currentTimeMillis();
 
         for (WeakReference<SubScene> ref : owners) {
             SubScene subScene = ref.get();
@@ -857,11 +849,9 @@ public final class GlobalCssMonitor {
 
             String currentUri = subScene.getUserAgentStylesheet();
             if (StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
-                // Strip existing timestamp and add new one
-                String baseUri = StylesheetUriConverter.stripTimestamp(currentUri);
-                String newUri = baseUri + "?t=" + timestamp;
+                // Set to null then restore to force reload
                 subScene.setUserAgentStylesheet(null);
-                subScene.setUserAgentStylesheet(newUri);
+                subScene.setUserAgentStylesheet(currentUri);
                 refreshCount++;
             }
         }
@@ -872,7 +862,7 @@ public final class GlobalCssMonitor {
     /**
      * Refreshes Application-level User Agent Stylesheet.
      *
-     * <p>Uses timestamp to force JavaFX to reload the stylesheet.
+     * <p>Uses null-set strategy to force JavaFX to reload the stylesheet.
      */
     private int refreshApplicationUserAgentStylesheet(String resourcePath, String sourceFileUri) {
         if (!resourcePath.equals(applicationUAResourcePath)) {
@@ -884,22 +874,22 @@ public final class GlobalCssMonitor {
             return 0;
         }
 
-        // Strip existing timestamp and add new one
-        String baseUri = StylesheetUriConverter.stripTimestamp(currentUri);
-        String newUri = baseUri + "?t=" + System.currentTimeMillis();
+        // Set to null then restore to force reload
         Application.setUserAgentStylesheet(null);
-        Application.setUserAgentStylesheet(newUri);
+        Application.setUserAgentStylesheet(currentUri);
 
         logger.log(Level.FINE, "Refreshed Application UA stylesheet: {0}", resourcePath);
         return 1;
     }
 
     /**
-     * Refreshes all registered stylesheets with new timestamps.
+     * Refreshes all registered stylesheets.
      *
      * <p>This method is called after FXML reload to ensure all CSS files
-     * are refreshed with the latest content. JavaFX's StyleManager caches
-     * stylesheets by URI, so we must use unique URIs to bypass the cache.
+     * are refreshed with the latest content.
+     *
+     * <p>Uses remove-add strategy for normal stylesheets and null-set strategy
+     * for User Agent stylesheets to force JavaFX to reload.
      *
      * <p>Must be called from JavaFX Application Thread.
      */
@@ -909,7 +899,6 @@ public final class GlobalCssMonitor {
         }
 
         int totalRefreshed = 0;
-        long timestamp = System.currentTimeMillis();
 
         // Refresh all normal stylesheets
         for (Map.Entry<String, List<WeakReference<ObservableList<String>>>> entry : stylesheetOwners.entrySet()) {
@@ -925,10 +914,9 @@ public final class GlobalCssMonitor {
                 for (int i = 0; i < stylesheets.size(); i++) {
                     String uri = stylesheets.get(i);
                     if (StylesheetUriConverter.matchesResourcePath(uri, resourcePath)) {
-                        String baseUri = StylesheetUriConverter.stripTimestamp(uri);
-                        String newUri = baseUri + "?t=" + timestamp;
+                        // Remove and re-add to force reload
                         stylesheets.remove(i);
-                        stylesheets.add(i, newUri);
+                        stylesheets.add(i, uri);
                         totalRefreshed++;
                     }
                 }
@@ -937,7 +925,6 @@ public final class GlobalCssMonitor {
 
         // Refresh Scene UA stylesheets
         for (Map.Entry<String, List<WeakReference<Scene>>> entry : sceneUAOwners.entrySet()) {
-            String resourcePath = entry.getKey();
             List<WeakReference<Scene>> owners = entry.getValue();
 
             for (WeakReference<Scene> ref : owners) {
@@ -947,11 +934,10 @@ public final class GlobalCssMonitor {
                 }
 
                 String currentUri = scene.getUserAgentStylesheet();
-                if (currentUri != null && StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
-                    String baseUri = StylesheetUriConverter.stripTimestamp(currentUri);
-                    String newUri = baseUri + "?t=" + timestamp;
+                if (currentUri != null) {
+                    // Set to null then restore to force reload
                     scene.setUserAgentStylesheet(null);
-                    scene.setUserAgentStylesheet(newUri);
+                    scene.setUserAgentStylesheet(currentUri);
                     totalRefreshed++;
                 }
             }
@@ -959,7 +945,6 @@ public final class GlobalCssMonitor {
 
         // Refresh SubScene UA stylesheets
         for (Map.Entry<String, List<WeakReference<SubScene>>> entry : subSceneUAOwners.entrySet()) {
-            String resourcePath = entry.getKey();
             List<WeakReference<SubScene>> owners = entry.getValue();
 
             for (WeakReference<SubScene> ref : owners) {
@@ -969,11 +954,10 @@ public final class GlobalCssMonitor {
                 }
 
                 String currentUri = subScene.getUserAgentStylesheet();
-                if (currentUri != null && StylesheetUriConverter.matchesResourcePath(currentUri, resourcePath)) {
-                    String baseUri = StylesheetUriConverter.stripTimestamp(currentUri);
-                    String newUri = baseUri + "?t=" + timestamp;
+                if (currentUri != null) {
+                    // Set to null then restore to force reload
                     subScene.setUserAgentStylesheet(null);
-                    subScene.setUserAgentStylesheet(newUri);
+                    subScene.setUserAgentStylesheet(currentUri);
                     totalRefreshed++;
                 }
             }
@@ -982,10 +966,9 @@ public final class GlobalCssMonitor {
         // Refresh Application UA stylesheet
         String appUri = applicationUserAgentStylesheet.get();
         if (appUri != null && applicationUAResourcePath != null) {
-            String baseUri = StylesheetUriConverter.stripTimestamp(appUri);
-            String newUri = baseUri + "?t=" + timestamp;
+            // Set to null then restore to force reload
             Application.setUserAgentStylesheet(null);
-            Application.setUserAgentStylesheet(newUri);
+            Application.setUserAgentStylesheet(appUri);
             totalRefreshed++;
         }
 
