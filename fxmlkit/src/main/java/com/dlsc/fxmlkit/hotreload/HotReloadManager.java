@@ -279,7 +279,7 @@ public final class HotReloadManager {
             initializeMonitoring(targetDir);
         } else {
             // Try source-only monitoring - check all possible source directories
-            for (String sourceDirPath : BuildSystem.getMainSourceDirectoryPaths()) {
+            for (String sourceDirPath : BuildSystem.getMainSourcePaths()) {
                 Path sourceDir = discoveredRoot.resolve(sourceDirPath);
                 if (Files.exists(sourceDir) && !monitoredRoots.contains(sourceDir)) {
                     initializeSourceOnlyMonitoring(sourceDir);
@@ -292,10 +292,10 @@ public final class HotReloadManager {
     /**
      * Finds the target directory for a specific project root.
      *
-     * <p>Delegates to {@link BuildSystem#findExistingOutputDirectory(Path)}.
+     * <p>Delegates to {@link ProjectPathResolver#findExistingOutputDirectory(Path)}.
      */
     private Path findTargetDirectoryForProject(Path projectRoot) {
-        return BuildSystem.findExistingOutputDirectory(projectRoot);
+        return ProjectPathResolver.findExistingOutputDirectory(projectRoot);
     }
 
     /**
@@ -510,7 +510,7 @@ public final class HotReloadManager {
                     cachedProjectRoot);
 
             // Try source-only monitoring as last resort - check all possible source directories
-            for (String sourceDirPath : BuildSystem.getMainSourceDirectoryPaths()) {
+            for (String sourceDirPath : BuildSystem.getMainSourcePaths()) {
                 Path sourceDir = cachedProjectRoot.resolve(sourceDirPath);
                 if (Files.exists(sourceDir)) {
                     initializeSourceOnlyMonitoring(sourceDir);
@@ -636,7 +636,7 @@ public final class HotReloadManager {
 
                 // Try to extract project root from this path
                 String pathStr = resourcePath.toString();
-                String projectRootStr = BuildSystem.extractProjectRoot(pathStr);
+                String projectRootStr = ProjectPathResolver.extractProjectRoot(pathStr);
                 
                 if (projectRootStr != null) {
                     Path projectRoot = Path.of(projectRootStr);
@@ -647,10 +647,10 @@ public final class HotReloadManager {
                 }
 
                 // Also try using findOutputRoot
-                Path outputRoot = BuildSystem.findOutputRoot(resourcePath);
+                Path outputRoot = ProjectPathResolver.findOutputRoot(resourcePath);
                 if (outputRoot != null) {
                     logger.log(Level.FINE, "Strategy 1: Found output root: {0}", outputRoot);
-                    Path projectRoot = BuildSystem.inferProjectRoot(outputRoot);
+                    Path projectRoot = ProjectPathResolver.inferProjectRoot(outputRoot);
                     if (projectRoot != null && Files.exists(projectRoot)) {
                         return projectRoot;
                     }
@@ -702,7 +702,7 @@ public final class HotReloadManager {
 
                                 // Try to extract project root from this path
                                 String pathStr = codePath.toString();
-                                String projectRootStr = BuildSystem.extractProjectRoot(pathStr);
+                                String projectRootStr = ProjectPathResolver.extractProjectRoot(pathStr);
                                 
                                 if (projectRootStr != null) {
                                     Path projectRoot = Path.of(projectRootStr);
@@ -712,9 +712,9 @@ public final class HotReloadManager {
                                 }
 
                                 // Also try using findOutputRoot + inferProjectRoot
-                                Path outputRoot = BuildSystem.findOutputRoot(codePath);
+                                Path outputRoot = ProjectPathResolver.findOutputRoot(codePath);
                                 if (outputRoot != null) {
-                                    Path projectRoot = BuildSystem.inferProjectRoot(outputRoot);
+                                    Path projectRoot = ProjectPathResolver.inferProjectRoot(outputRoot);
                                     if (projectRoot != null && Files.exists(projectRoot)) {
                                         return projectRoot;
                                     }
@@ -762,10 +762,10 @@ public final class HotReloadManager {
     /**
      * Checks if a directory looks like a project root.
      *
-     * <p>Delegates to {@link BuildSystem#looksLikeProjectRoot(Path)}.
+     * <p>Delegates to {@link ProjectPathResolver#looksLikeProjectRoot(Path)}.
      */
     private boolean looksLikeProjectRoot(Path dir) {
-        return BuildSystem.looksLikeProjectRoot(dir);
+        return ProjectPathResolver.looksLikeProjectRoot(dir);
     }
 
     /**
@@ -873,7 +873,7 @@ public final class HotReloadManager {
 
         try {
             Path fxmlPath = Path.of(fxmlUrl.toURI());
-            Path targetDir = BuildSystem.findOutputRoot(fxmlPath);
+            Path targetDir = ProjectPathResolver.findOutputRoot(fxmlPath);
 
             if (targetDir != null && !monitoredRoots.contains(targetDir)) {
                 initializeMonitoring(targetDir);
@@ -894,7 +894,7 @@ public final class HotReloadManager {
      */
     private synchronized void initializeMonitoring(Path targetDir) {
         // Infer source directory from target
-        Path sourceDir = BuildSystem.inferSourceDirectory(targetDir);
+        Path sourceDir = ProjectPathResolver.inferSourceDirectory(targetDir);
 
         // Determine which directory to monitor
         Path dirToMonitor;
@@ -947,7 +947,7 @@ public final class HotReloadManager {
 
             // Cache project root for global CSS monitor
             if (cachedProjectRoot == null) {
-                cachedProjectRoot = BuildSystem.inferProjectRoot(targetDir);
+                cachedProjectRoot = ProjectPathResolver.inferProjectRoot(targetDir);
                 if (cachedProjectRoot != null) {
                     logger.log(Level.FINE, "Cached project root: {0}", cachedProjectRoot);
                     // Update GlobalCssMonitor if CSS hot reload is enabled
@@ -1093,7 +1093,7 @@ public final class HotReloadManager {
         logger.log(Level.FINE, "File {0}: {1}", new Object[]{kind.name(), resourcePath});
 
         // Sync to target only if monitoring source directory
-        boolean isSourceDir = BuildSystem.isSourcePath(watchedDir.toString());
+        boolean isSourceDir = ProjectPathResolver.isSourcePath(watchedDir.toString());
         if (isSourceDir && kind != StandardWatchEventKinds.ENTRY_DELETE) {
             syncToTarget(changedFile, watchedDir);
         }
@@ -1460,8 +1460,7 @@ public final class HotReloadManager {
             return path.substring(bangIndex + 2);
         }
 
-        // Use BuildSystem to extract resource path
-        return BuildSystem.extractResourcePath(path);
+        return ProjectPathResolver.extractResourcePath(path);
     }
 
     /**
@@ -1532,7 +1531,7 @@ public final class HotReloadManager {
             return;
         }
 
-        Path targetRoot = BuildSystem.inferOutputDirectory(sourceRoot);
+        Path targetRoot = ProjectPathResolver.inferOutputDirectory(sourceRoot);
         if (targetRoot == null || !Files.exists(targetRoot)) {
             return;
         }

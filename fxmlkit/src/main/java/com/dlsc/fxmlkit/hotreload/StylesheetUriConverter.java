@@ -13,6 +13,7 @@ import java.util.logging.Logger;
  * to support CSS hot reload functionality.
  *
  * @see BuildSystem
+ * @see ProjectPathResolver
  */
 public final class StylesheetUriConverter {
 
@@ -73,8 +74,8 @@ public final class StylesheetUriConverter {
             Path path = Path.of(URI.create(uri));
             String pathStr = path.toString().replace('\\', '/');
 
-            // Use BuildSystem to extract resource path
-            return BuildSystem.extractResourcePath(pathStr);
+            // Use ProjectPathResolver to extract resource path
+            return ProjectPathResolver.extractResourcePath(pathStr);
         } catch (Exception e) {
             logger.log(Level.FINE, "Failed to parse file URI: {0} - {1}",
                     new Object[]{uri, e.getMessage()});
@@ -95,7 +96,7 @@ public final class StylesheetUriConverter {
         }
 
         // Try all source locations
-        for (String sourceDir : BuildSystem.getSourceDirectories()) {
+        for (String sourceDir : BuildSystem.getSourcePaths()) {
             Path sourcePath = projectRoot.resolve(sourceDir).resolve(resourcePath);
             if (Files.exists(sourcePath)) {
                 return sourcePath;

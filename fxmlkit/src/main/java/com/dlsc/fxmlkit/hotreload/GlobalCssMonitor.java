@@ -770,7 +770,7 @@ public final class GlobalCssMonitor {
             logger.log(Level.FINE, "Checking stylesheet path for project root: {0}", pathStr);
 
             // Extract project root from the path
-            String projectRootStr = BuildSystem.extractProjectRoot(pathStr);
+            String projectRootStr = ProjectPathResolver.extractProjectRoot(pathStr);
             if (projectRootStr == null) {
                 logger.log(Level.FINE, "Could not extract project root from: {0}", pathStr);
                 return;

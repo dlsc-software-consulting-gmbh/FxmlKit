@@ -1,25 +1,28 @@
 package com.dlsc.fxmlkit.hotreload;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
  * Enumeration of supported build systems and their directory conventions.
  *
- * <p>This enum centralizes all build system path configurations to ensure
- * consistency across HotReloadManager and StylesheetUriConverter.
- *
- * <p>Each enum constant represents a specific output directory type and
- * defines the mapping between output directories and source directories.
+ * <p>This enum defines the configuration for each build system:
+ * <ul>
+ *   <li>Output directory markers for path matching</li>
+ *   <li>Source directory mappings</li>
+ *   <li>Test vs main configuration distinction</li>
+ * </ul>
  *
  * <p>Supported build systems:
  * <ul>
- *   <li>Maven - target/classes, target/test-classes</li>
- *   <li>Gradle - build/classes/java/*, build/resources/*</li>
- *   <li>IntelliJ IDEA - out/production/*, out/test/*</li>
+ *   <li><b>Maven</b> - target/classes, target/test-classes</li>
+ *   <li><b>Gradle</b> - build/classes/java/*, build/resources/*</li>
+ *   <li><b>IntelliJ IDEA</b> - out/production/*, out/test/*</li>
  * </ul>
+ *
+ * <p>For path resolution operations, see {@link ProjectPathResolver}.
+ *
+ * @see ProjectPathResolver
  */
 public enum BuildSystem {
 
@@ -153,10 +156,10 @@ public enum BuildSystem {
             true
     );
 
-    // ==================== Source Directory Markers ====================
+    // ==================== Static Configuration ====================
 
     /**
-     * All recognized source directory markers.
+     * All recognized source directory markers (with leading and trailing slashes).
      */
     private static final String[] SOURCE_MARKERS = {
             "/src/main/resources/",
@@ -167,23 +170,41 @@ public enum BuildSystem {
             "/src/test/kotlin/"
     };
 
+    /**
+     * Main source directory paths (without slashes).
+     */
+    private static final String[] MAIN_SOURCE_PATHS = {
+            "src/main/resources",
+            "src/main/java",
+            "src/main/kotlin"
+    };
+
+    /**
+     * Project marker files that indicate a project root.
+     */
+    private static final String[] PROJECT_MARKER_FILES = {
+            "pom.xml",
+            "build.gradle",
+            "build.gradle.kts"
+    };
+
     // ==================== Instance Fields ====================
 
     /**
      * Marker string to identify this output directory in a path.
-     * Used for pattern matching (e.g., "/target/classes/").
+     * Includes leading and trailing slashes (e.g., "/target/classes/").
      */
     private final String outputMarker;
 
     /**
      * Relative path from project root to source directory.
-     * Used when inferring source from output (e.g., "src/main/resources").
+     * No leading/trailing slashes (e.g., "src/main/resources").
      */
     private final String sourceDir;
 
     /**
-     * Relative path from project root to output directory for resources.
-     * Used when syncing source to output (e.g., "target/classes").
+     * Relative path from project root to output directory.
+     * No leading/trailing slashes (e.g., "target/classes").
      */
     private final String outputDir;
 
@@ -201,7 +222,7 @@ public enum BuildSystem {
         this.test = test;
     }
 
-    // ==================== Getters ====================
+    // ==================== Instance Getters ====================
 
     /**
      * Returns the marker string used to identify this output directory.
@@ -239,29 +260,13 @@ public enum BuildSystem {
         return test;
     }
 
-    // ==================== Static Methods ====================
+    // ==================== Static Query Methods ====================
 
     /**
-     * Gets source directory paths without leading/trailing slashes.
-     * Useful for path construction (e.g., projectRoot.resolve(sourceDir)).
+     * Finds the matching build system from an output path.
      *
-     * @return array of source directory paths
-     */
-    public static String[] getSourceDirectories() {
-        String[] dirs = new String[SOURCE_MARKERS.length];
-        for (int i = 0; i < SOURCE_MARKERS.length; i++) {
-            // "/src/main/resources/" → "src/main/resources"
-            String marker = SOURCE_MARKERS[i];
-            dirs[i] = marker.substring(1, marker.length() - 1);
-        }
-        return dirs;
-    }
-
-    /**
-     * Finds the build system from an output path.
-     *
-     * @param path the file path to check
-     * @return the matching BuildSystem, or null if not found
+     * @param path the file path to check (may use forward or back slashes)
+     * @return the matching BuildSystem, or null if not recognized
      */
     public static BuildSystem fromOutputPath(String path) {
         if (path == null) {
@@ -269,7 +274,7 @@ public enum BuildSystem {
         }
         String normalized = path.replace('\\', '/');
 
-        // Ensure path ends with / for matching (outputMarker all end with /)
+        // Ensure path ends with / for matching (outputMarker ends with /)
         String normalizedWithSlash = normalized.endsWith("/") ? normalized : normalized + "/";
 
         for (BuildSystem bs : values()) {
@@ -281,239 +286,59 @@ public enum BuildSystem {
     }
 
     /**
-     * Checks if a path is a source directory.
+     * Returns all source directory markers.
      *
-     * @param path the path to check
-     * @return true if the path contains a source directory marker
+     * <p>Each marker includes leading and trailing slashes for pattern matching.
+     *
+     * @return array of source markers (e.g., "/src/main/resources/")
      */
-    public static boolean isSourcePath(String path) {
-        if (path == null) {
-            return false;
-        }
-        String normalized = path.replace('\\', '/');
-
-        // Ensure path ends with / for matching (SOURCE_MARKERS all end with /)
-        String normalizedWithSlash = normalized.endsWith("/") ? normalized : normalized + "/";
-
-        for (String marker : SOURCE_MARKERS) {
-            if (normalizedWithSlash.contains(marker)) {
-                return true;
-            }
-        }
-        return false;
+    public static String[] getSourceMarkers() {
+        return SOURCE_MARKERS.clone();
     }
 
     /**
-     * Checks if a path is a test source directory.
+     * Returns source directory paths without slashes.
      *
-     * @param path the path to check
-     * @return true if the path is a test source directory
+     * <p>Useful for path construction: {@code projectRoot.resolve(sourceDir)}.
+     *
+     * @return array of source directory paths (e.g., "src/main/resources")
      */
-    public static boolean isTestSourcePath(String path) {
-        if (path == null) {
-            return false;
+    public static String[] getSourcePaths() {
+        String[] dirs = new String[SOURCE_MARKERS.length];
+        for (int i = 0; i < SOURCE_MARKERS.length; i++) {
+            // "/src/main/resources/" → "src/main/resources"
+            String marker = SOURCE_MARKERS[i];
+            dirs[i] = marker.substring(1, marker.length() - 1);
         }
-        String normalized = path.replace('\\', '/');
-        return normalized.contains("/src/test/");
+        return dirs;
     }
 
     /**
-     * Extracts the project root from an output path.
+     * Returns main source directory paths (non-test).
      *
-     * @param path the output path
-     * @return the project root path, or null if not found
+     * @return array of main source paths
      */
-    public static String extractProjectRoot(String path) {
-        BuildSystem bs = fromOutputPath(path);
-        if (bs == null) {
-            return null;
-        }
-        String normalized = path.replace('\\', '/');
-
-        // Ensure path ends with / for matching (outputMarker all end with /)
-        String normalizedWithSlash = normalized.endsWith("/") ? normalized : normalized + "/";
-
-        int idx = normalizedWithSlash.indexOf(bs.outputMarker);
-        if (idx >= 0) {
-            return normalizedWithSlash.substring(0, idx);
-        }
-        return null;
+    public static String[] getMainSourcePaths() {
+        return MAIN_SOURCE_PATHS.clone();
     }
 
     /**
-     * Extracts the resource path (classpath-relative) from a full path.
+     * Returns project marker files that indicate a project root.
      *
-     * @param path the full file path
-     * @return the resource path, or null if not found
+     * @return array of marker file names (e.g., "pom.xml")
      */
-    public static String extractResourcePath(String path) {
-        if (path == null) {
-            return null;
-        }
-        String normalized = path.replace('\\', '/');
-
-        // Try output markers first
-        for (BuildSystem bs : values()) {
-            int idx = normalized.indexOf(bs.outputMarker);
-            if (idx >= 0) {
-                return normalized.substring(idx + bs.outputMarker.length());
-            }
-        }
-
-        // Try source markers
-        for (String marker : SOURCE_MARKERS) {
-            int idx = normalized.indexOf(marker);
-            if (idx >= 0) {
-                return normalized.substring(idx + marker.length());
-            }
-        }
-
-        return null;
+    public static String[] getProjectMarkerFiles() {
+        return PROJECT_MARKER_FILES.clone();
     }
 
     /**
-     * Extracts the project root from a source path.
+     * Returns main (non-test) output directory paths.
      *
-     * @param path the source path
-     * @return the project root, or null if not found
+     * <p>Paths are derived from enum constants, without leading/trailing slashes.
+     *
+     * @return array of output paths (e.g., "target/classes")
      */
-    public static String extractProjectRootFromSource(String path) {
-        if (path == null) {
-            return null;
-        }
-        String normalized = path.replace('\\', '/');
-
-        // Ensure path ends with / for matching (SOURCE_MARKERS all end with /)
-        String normalizedWithSlash = normalized.endsWith("/") ? normalized : normalized + "/";
-
-        for (String marker : SOURCE_MARKERS) {
-            int idx = normalizedWithSlash.indexOf(marker);
-            if (idx >= 0) {
-                return normalizedWithSlash.substring(0, idx);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Infers the source directory from an output directory.
-     *
-     * @param outputPath the output directory path
-     * @return the source directory path, or null if cannot infer
-     */
-    public static Path inferSourceDirectory(Path outputPath) {
-        if (outputPath == null) {
-            return null;
-        }
-        String projectRoot = extractProjectRoot(outputPath.toString());
-        BuildSystem bs = fromOutputPath(outputPath.toString());
-
-        if (projectRoot != null && bs != null) {
-            return Path.of(projectRoot, bs.sourceDir);
-        }
-        return null;
-    }
-
-    /**
-     * Infers the output directory from a source directory.
-     * Checks which build system is actually in use.
-     *
-     * @param sourcePath the source directory path
-     * @return the output directory path, or null if cannot infer
-     */
-    public static Path inferOutputDirectory(Path sourcePath) {
-        if (sourcePath == null) {
-            return null;
-        }
-
-        String projectRoot = extractProjectRootFromSource(sourcePath.toString());
-        if (projectRoot == null) {
-            return null;
-        }
-
-        boolean isTest = isTestSourcePath(sourcePath.toString());
-        Path project = Path.of(projectRoot);
-
-        // Check Gradle first (more specific paths)
-        Path gradleOutput = isTest
-                ? project.resolve("build/resources/test")
-                : project.resolve("build/resources/main");
-        if (Files.exists(gradleOutput)) {
-            return gradleOutput;
-        }
-
-        // Check Maven
-        Path mavenOutput = isTest
-                ? project.resolve("target/test-classes")
-                : project.resolve("target/classes");
-        if (Files.exists(mavenOutput)) {
-            return mavenOutput;
-        }
-
-        // Check IntelliJ IDEA
-        Path ideaOutput = isTest
-                ? project.resolve("out/test/resources")
-                : project.resolve("out/production/resources");
-        if (Files.exists(ideaOutput)) {
-            return ideaOutput;
-        }
-
-        // No output directory found
-        // Caller should handle null (e.g., skip sync operation)
-        return null;
-    }
-
-    /**
-     * Finds the output root directory from a file path within an output directory.
-     *
-     * @param filePath the file path within an output directory
-     * @return the output root directory, or null if not found
-     */
-    public static Path findOutputRoot(Path filePath) {
-        if (filePath == null) {
-            return null;
-        }
-
-        String pathStr = filePath.toString().replace('\\', '/');
-        BuildSystem bs = fromOutputPath(pathStr);
-
-        if (bs != null) {
-            // Ensure path ends with / for consistent matching
-            String pathStrWithSlash = pathStr.endsWith("/") ? pathStr : pathStr + "/";
-            int idx = pathStrWithSlash.indexOf(bs.outputMarker);
-            if (idx >= 0) {
-                // Return path up to and including the marker (minus trailing /)
-                return Path.of(pathStrWithSlash.substring(0, idx + bs.outputMarker.length() - 1));
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Infers the project root from an output directory.
-     *
-     * @param outputDir the output directory
-     * @return the project root, or null if cannot infer
-     */
-    public static Path inferProjectRoot(Path outputDir) {
-        String projectRoot = extractProjectRoot(outputDir.toString());
-        return projectRoot != null ? Path.of(projectRoot) : null;
-    }
-
-    // ==================== Output Directory Discovery ====================
-
-    /**
-     * Gets all main (non-test) output directory paths without slashes.
-     *
-     * <p>These paths are relative to project root and can be used to check
-     * which build system output exists.
-     *
-     * <p>Example output: ["target/classes", "build/classes/java/main", "build/resources/main", ...]
-     *
-     * @return array of output directory paths (without leading/trailing slashes)
-     */
-    public static String[] getMainOutputDirectoryPaths() {
+    public static String[] getMainOutputPaths() {
         Set<String> paths = new LinkedHashSet<>();  // Preserve order, avoid duplicates
         for (BuildSystem bs : values()) {
             if (!bs.isTest()) {
@@ -526,86 +351,20 @@ public enum BuildSystem {
     }
 
     /**
-     * Gets all main (non-test) source directory paths.
+     * Returns output directory paths for either main or test.
      *
-     * <p>Returns the most common source directories that indicate a project root.
-     *
-     * @return array of source directory paths
+     * @param forTest true to get test output paths, false for main
+     * @return array of output paths
      */
-    public static String[] getMainSourceDirectoryPaths() {
-        return new String[] {
-                "src/main/resources",
-                "src/main/java",
-                "src/main/kotlin"
-        };
-    }
-
-    /**
-     * Gets all project marker files that indicate a project root.
-     *
-     * @return array of project marker file names
-     */
-    public static String[] getProjectMarkerFiles() {
-        return new String[] {
-                "pom.xml",
-                "build.gradle",
-                "build.gradle.kts"
-        };
-    }
-
-    /**
-     * Finds the first existing output directory for a project.
-     *
-     * <p>Iterates through all known output directory paths and returns
-     * the first one that exists.
-     *
-     * @param projectRoot the project root directory
-     * @return the first existing output directory, or null if none found
-     */
-    public static Path findExistingOutputDirectory(Path projectRoot) {
-        if (projectRoot == null) {
-            return null;
-        }
-        for (String outputPath : getMainOutputDirectoryPaths()) {
-            Path dir = projectRoot.resolve(outputPath);
-            if (Files.exists(dir)) {
-                return dir;
+    public static String[] getOutputPaths(boolean forTest) {
+        Set<String> paths = new LinkedHashSet<>();
+        for (BuildSystem bs : values()) {
+            if (bs.isTest() == forTest) {
+                // "/target/classes/" → "target/classes"
+                String path = bs.outputMarker.substring(1, bs.outputMarker.length() - 1);
+                paths.add(path);
             }
         }
-        return null;
-    }
-
-    /**
-     * Checks if a directory looks like a project root.
-     *
-     * <p>A directory is considered a project root if it contains:
-     * <ul>
-     *   <li>A build file (pom.xml, build.gradle, build.gradle.kts), or</li>
-     *   <li>A source directory (src/main/resources, src/main/java, src/main/kotlin)</li>
-     * </ul>
-     *
-     * @param dir the directory to check
-     * @return true if the directory looks like a project root
-     */
-    public static boolean looksLikeProjectRoot(Path dir) {
-        if (dir == null || !Files.isDirectory(dir)) {
-            return false;
-        }
-
-        // Check for build marker files
-        for (String marker : getProjectMarkerFiles()) {
-            if (Files.exists(dir.resolve(marker))) {
-                return true;
-            }
-        }
-
-        // Check for source directories
-        for (String sourceDir : getMainSourceDirectoryPaths()) {
-            if (Files.exists(dir.resolve(sourceDir))) {
-                return true;
-            }
-        }
-
-        return false;
+        return paths.toArray(new String[0]);
     }
 }
