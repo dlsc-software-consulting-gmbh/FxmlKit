@@ -155,10 +155,21 @@ public class StatusCard extends VBox {
 
 ### 依赖要求
 
-- **Java：** 11 或更高版本
-- **JavaFX：** 11 或更高版本（推荐 17+）
+- **Java:** 11 或更高版本（推荐 17.0.4+）
+- **JavaFX:** 11 或更高版本（推荐 17+）
 
-FxmlKit 以 Java 11 为最低版本，确保广泛兼容性的同时支持现代 JavaFX 特性。
+#### 热更新性能说明
+
+FxmlKit 使用 Java 内置的 `WatchService` 实现 FXML/CSS 热更新。该服务在不同操作系统上的性能表现存在差异：
+
+| 操作系统 | Java 版本 | 文件变更检测延迟 |
+|---------|----------|----------------|
+| Windows | 11+ | 几乎瞬间 |
+| Linux | 11+ | 几乎瞬间 |
+| macOS | 11 ~ 17.0.3 | 约 10 秒 |
+| macOS | 17.0.4+ | 约 2 秒 |
+
+> **提示：** 为了兼容性，项目 pom.xml 中设置的 Java 版本为 11。macOS 用户如需运行 fxmlkit-samples 示例，建议将 JDK 升级至 17.0.4 或更高版本以获得更好的热更新体验。
 
 ### 安装
 
@@ -502,19 +513,12 @@ FxmlKit.setCssHotReloadEnabled(true);
 // 启用控件 UA 样式表热更新（需要显式启用，依赖 CSS 热更新）
 FxmlKit.setControlUAHotReloadEnabled(true);
 
-// 配置热更新防抖时间（默认：500ms）
-FxmlKit.setHotReloadDebounceMillis(1000);  // 如遇重复加载可增大此值
-
 // 同时启用（等同于 enableDevelopmentMode()）
 FxmlKit.setFxmlHotReloadEnabled(true);
 FxmlKit.setCssHotReloadEnabled(true);
 
 // 全部禁用
 FxmlKit.disableDevelopmentMode();
-```
-
-**关于防抖时间：**  
-防抖窗口用于防止编辑器或 IDE 在单次保存时触发多个文件系统事件而导致的重复加载。如果遇到重复加载，可增加防抖时间（如 1500~3000ms）。如果重载响应较慢，可减小防抖时间（建议最小约 200ms）。
 ```
 
 ### 与 CSSFX 配合使用

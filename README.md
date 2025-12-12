@@ -155,10 +155,21 @@ FXML usage:
 
 ### Requirements
 
-- **Java:** 11 or higher
+- **Java:** 11 or higher (17.0.4+ recommended)
 - **JavaFX:** 11 or higher (17+ recommended)
 
-FxmlKit targets Java 11 as the minimum version, ensuring wide compatibility while supporting modern JavaFX features.
+#### Hot Reload Performance Note
+
+FxmlKit uses Java's built-in `WatchService` for FXML/CSS hot reload. Performance varies across operating systems:
+
+| OS | Java Version | File Change Detection Delay |
+|----|--------------|----------------------------|
+| Windows | 11+ | Near-instant |
+| Linux | 11+ | Near-instant |
+| macOS | 11 ~ 17.0.3 | ~10 seconds |
+| macOS | 17.0.4+ | ~2 seconds |
+
+> **Note:** For compatibility, the Java version in pom.xml is set to 11. macOS users running fxmlkit-samples demos should upgrade to JDK 17.0.4 or higher for a better hot reload experience.
 
 ### Installation
 
@@ -502,9 +513,6 @@ FxmlKit.setCssHotReloadEnabled(true);
 // Enable control UA stylesheet hot reload (opt-in, requires CSS hot reload)
 FxmlKit.setControlUAHotReloadEnabled(true);
 
-// Configure hot reload debounce time (default: 500ms)
-FxmlKit.setHotReloadDebounceMillis(2000);  // Increase if experiencing duplicate reloads
-
 // Enable both (equivalent to enableDevelopmentMode())
 FxmlKit.setFxmlHotReloadEnabled(true);
 FxmlKit.setCssHotReloadEnabled(true);
@@ -512,9 +520,6 @@ FxmlKit.setCssHotReloadEnabled(true);
 // Disable all
 FxmlKit.disableDevelopmentMode();
 ```
-
-**About Debounce:**  
-The debounce window prevents duplicate reloads when editors or IDEs trigger multiple file system events for a single save. If you experience duplicate reloads, increase the debounce time (e.g., to 1500-3000ms). If reload feels sluggish, decrease it (minimum ~200ms recommended).
 
 ### Using with CSSFX
 
