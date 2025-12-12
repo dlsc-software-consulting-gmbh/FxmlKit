@@ -758,6 +758,10 @@ public final class HotReloadManager {
 
     /**
      * Performs full reload for affected components.
+     *
+     * <p>After FXML reload, all CSS stylesheets are refreshed with new timestamps
+     * to ensure the latest styles are applied. This fixes the issue where JavaFX's
+     * StyleManager cache causes stale CSS to be displayed after FXML reload.
      */
     private void reloadComponentsFull(Set<String> affectedPaths) {
         Set<HotReloadable> componentsToReload = collectComponents(affectedPaths);
@@ -778,6 +782,10 @@ public final class HotReloadManager {
                             new Object[]{component.getClass().getSimpleName(), e.getMessage()});
                 }
             }
+
+            // After FXML reload, refresh all CSS with new timestamps to bypass cache
+            globalCssMonitor.refreshAllStylesheets();
+
             logger.log(Level.INFO, "Hot reload complete");
         });
     }
@@ -829,20 +837,29 @@ public final class HotReloadManager {
 
     /**
      * Refreshes stylesheets for a Parent node and all its children.
+     *
+     * <p>Uses timestamp query parameter to force JavaFX to reload the stylesheet.
+     * JavaFX's StyleManager caches stylesheets by URI string, so we must use
+     * a unique URI each time to bypass the cache.
      */
     private void refreshStylesheets(Parent root, String cssResourcePath, String sourceFileUri) {
+        long timestamp = System.currentTimeMillis();
+        refreshStylesheetsRecursive(root, cssResourcePath, timestamp);
+    }
+
+    /**
+     * Recursively refreshes stylesheets with shared timestamp.
+     */
+    private void refreshStylesheetsRecursive(Parent root, String cssResourcePath, long timestamp) {
         ObservableList<String> stylesheets = root.getStylesheets();
         for (int i = 0; i < stylesheets.size(); i++) {
             String uri = stylesheets.get(i);
             if (StylesheetUriConverter.matchesResourcePath(uri, cssResourcePath)) {
-                if (sourceFileUri != null) {
-                    // Replace with file:// URI to bypass cache
-                    stylesheets.set(i, sourceFileUri);
-                } else {
-                    // Fallback: remove and re-add
-                    stylesheets.remove(i);
-                    stylesheets.add(i, uri);
-                }
+                // Strip existing timestamp and add new one to bust cache
+                String baseUri = StylesheetUriConverter.stripTimestamp(uri);
+                String newUri = baseUri + "?t=" + timestamp;
+                stylesheets.remove(i);
+                stylesheets.add(i, newUri);
             }
         }
 
@@ -851,7 +868,7 @@ public final class HotReloadManager {
             if (child instanceof Parent) {
                 // Intentional: traditional instanceof for backward compatibility.
                 Parent childParent = (Parent) child;
-                refreshStylesheets(childParent, cssResourcePath, sourceFileUri);
+                refreshStylesheetsRecursive(childParent, cssResourcePath, timestamp);
             }
         }
     }
