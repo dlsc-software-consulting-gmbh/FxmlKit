@@ -455,8 +455,17 @@ public final class GlobalCssMonitor {
     private void registerSceneUserAgentStylesheet(String uri, Scene scene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
-                    .add(new WeakReference<>(scene));
+            List<WeakReference<Scene>> owners = 
+                    sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>());
+            
+            // Check if already registered
+            for (WeakReference<Scene> ref : owners) {
+                if (ref.get() == scene) {
+                    return;  // Already registered
+                }
+            }
+            
+            owners.add(new WeakReference<>(scene));
             logger.log(Level.FINE, "Registered Scene UA stylesheet: {0}", resourcePath);
         }
     }
@@ -495,8 +504,17 @@ public final class GlobalCssMonitor {
     private void registerSubSceneUserAgentStylesheet(String uri, SubScene subScene) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
         if (resourcePath != null) {
-            subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
-                    .add(new WeakReference<>(subScene));
+            List<WeakReference<SubScene>> owners = 
+                    subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>());
+            
+            // Check if already registered
+            for (WeakReference<SubScene> ref : owners) {
+                if (ref.get() == subScene) {
+                    return;  // Already registered
+                }
+            }
+            
+            owners.add(new WeakReference<>(subScene));
             logger.log(Level.FINE, "Registered SubScene UA stylesheet: {0}", resourcePath);
         }
     }
@@ -682,6 +700,7 @@ public final class GlobalCssMonitor {
 
     /**
      * Registers a single stylesheet URI.
+     * Checks if the owner is already registered to prevent duplicate entries.
      */
     private void registerStylesheetUri(String uri, ObservableList<String> owner) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
@@ -690,9 +709,17 @@ public final class GlobalCssMonitor {
             return;
         }
 
-        stylesheetOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
-                .add(new WeakReference<>(owner));
-
+        List<WeakReference<ObservableList<String>>> owners = 
+                stylesheetOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>());
+        
+        // Check if this owner is already registered (prevent duplicates)
+        for (WeakReference<ObservableList<String>> ref : owners) {
+            if (ref.get() == owner) {
+                return;  // Already registered, skip
+            }
+        }
+        
+        owners.add(new WeakReference<>(owner));
         logger.log(Level.FINE, "Registered stylesheet: {0}", resourcePath);
     }
 

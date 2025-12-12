@@ -166,44 +166,6 @@ public final class FxmlKit {
     }
 
     /**
-     * Sets the debounce time for hot reload events.
-     *
-     * <p>The debounce window prevents duplicate reloads when editors or IDEs
-     * trigger multiple file system events for a single save operation. Some editors
-     * (especially on certain operating systems) may trigger 2-3 events per save.
-     *
-     * <p>Adjust this value based on your development environment:
-     * <ul>
-     *   <li>If experiencing duplicate reloads: increase to 1000-2000ms</li>
-     *   <li>If reload feels sluggish: decrease (minimum ~200ms recommended)</li>
-     * </ul>
-     *
-     * <p>Default: 500ms
-     *
-     * <pre>{@code
-     * // Example: increase debounce for slower systems
-     * FxmlKit.setHotReloadDebounceMillis(1500);
-     * }</pre>
-     *
-     * @param millis the debounce time in milliseconds (must be positive)
-     * @throws IllegalArgumentException if millis is not positive
-     * @see #getHotReloadDebounceMillis()
-     */
-    public static void setHotReloadDebounceMillis(long millis) {
-        HotReloadManager.getInstance().setDebounceMillis(millis);
-    }
-
-    /**
-     * Returns the current debounce time for hot reload events.
-     *
-     * @return the debounce time in milliseconds
-     * @see #setHotReloadDebounceMillis(long)
-     */
-    public static long getHotReloadDebounceMillis() {
-        return HotReloadManager.getInstance().getDebounceMillis();
-    }
-
-    /**
      * Returns the Application-level User Agent Stylesheet property.
      *
      * <p>Use this instead of {@link javafx.application.Application#setUserAgentStylesheet(String)}
