@@ -255,6 +255,47 @@ public final class HotReloadManager {
     private final GlobalCssMonitor globalCssMonitor = new GlobalCssMonitor();
 
     private HotReloadManager() {
+        // Set up callback for when GlobalCssMonitor discovers new project roots
+        globalCssMonitor.setOnProjectRootDiscovered(this::onProjectRootDiscovered);
+    }
+
+    /**
+     * Called when GlobalCssMonitor discovers a new project root from stylesheet URIs.
+     *
+     * <p>This enables CSS hot reload to work in multi-module projects by
+     * automatically starting file monitoring for newly discovered projects.
+     */
+    private synchronized void onProjectRootDiscovered(Path discoveredRoot) {
+        if (discoveredRoot == null || !cssHotReloadEnabled) {
+            return;
+        }
+
+        logger.log(Level.INFO, "Adding monitoring for discovered project: {0}", discoveredRoot);
+
+        // Find the target directory for this project
+        Path targetDir = findTargetDirectoryForProject(discoveredRoot);
+        if (targetDir != null) {
+            // Initialize monitoring for this project
+            initializeMonitoring(targetDir);
+        } else {
+            // Try source-only monitoring - check all possible source directories
+            for (String sourceDirPath : BuildSystem.getMainSourceDirectoryPaths()) {
+                Path sourceDir = discoveredRoot.resolve(sourceDirPath);
+                if (Files.exists(sourceDir) && !monitoredRoots.contains(sourceDir)) {
+                    initializeSourceOnlyMonitoring(sourceDir);
+                    break;  // Only need to monitor one source directory
+                }
+            }
+        }
+    }
+
+    /**
+     * Finds the target directory for a specific project root.
+     *
+     * <p>Delegates to {@link BuildSystem#findExistingOutputDirectory(Path)}.
+     */
+    private Path findTargetDirectoryForProject(Path projectRoot) {
+        return BuildSystem.findExistingOutputDirectory(projectRoot);
     }
 
     /**
@@ -403,16 +444,361 @@ public final class HotReloadManager {
 
     /**
      * Updates the GlobalCssMonitor state based on current configuration.
+     *
+     * <p>When CSS hot reload is enabled, this method:
+     * <ol>
+     *   <li>Attempts to auto-detect project root if not already set</li>
+     *   <li>Initializes WatchService for CSS file monitoring</li>
+     *   <li>Starts GlobalCssMonitor to track Scene/Parent stylesheets</li>
+     * </ol>
+     *
+     * <p>This allows CSS hot reload to work even without FxmlView components,
+     * enabling pure JavaFX applications to benefit from CSS hot reload.
      */
-    private void updateGlobalCssMonitorState() {
+    private synchronized void updateGlobalCssMonitorState() {
         if (cssHotReloadEnabled) {
+            // Auto-detect project root if not already set
+            if (cachedProjectRoot == null) {
+                cachedProjectRoot = tryInferProjectRootFromClasspath();
+
+                if (cachedProjectRoot != null) {
+                    logger.log(Level.INFO, "Auto-detected project root: {0}", cachedProjectRoot);
+                } else {
+                    logger.log(Level.WARNING,
+                            "Could not auto-detect project root for CSS hot reload.\n" +
+                                    "  CSS hot reload may not work without FxmlView components.\n" +
+                                    "  You can manually set it via FxmlKit.setProjectRoot(Path)");
+                }
+            }
+
             if (cachedProjectRoot != null) {
                 globalCssMonitor.setProjectRoot(cachedProjectRoot);
+
+                // Initialize WatchService for CSS-only monitoring
+                // This ensures CSS hot reload works even without FxmlView
+                initializeCssOnlyMonitoring();
             }
+
             globalCssMonitor.startMonitoring();
         } else {
             globalCssMonitor.stopMonitoring();
         }
+    }
+
+    /**
+     * Initializes WatchService for CSS-only hot reload.
+     *
+     * <p>This method is called when CSS hot reload is enabled but no FxmlView
+     * components have been registered yet. It ensures that CSS file changes
+     * are detected even in pure JavaFX applications.
+     */
+    private synchronized void initializeCssOnlyMonitoring() {
+        if (cachedProjectRoot == null) {
+            logger.log(Level.FINE, "Cannot initialize CSS-only monitoring: projectRoot is null");
+            return;
+        }
+
+        logger.log(Level.FINE, "Initializing CSS-only monitoring for project: {0}", cachedProjectRoot);
+
+        // Try to find the target directory first (needed for initializeMonitoring)
+        Path targetDir = findTargetDirectory();
+        if (targetDir == null) {
+            logger.log(Level.WARNING,
+                    "Could not find target/build directory. CSS hot reload may not work.\n" +
+                            "  Project root: {0}\n" +
+                            "  Please run 'mvn compile' or 'gradle build' first.",
+                    cachedProjectRoot);
+
+            // Try source-only monitoring as last resort - check all possible source directories
+            for (String sourceDirPath : BuildSystem.getMainSourceDirectoryPaths()) {
+                Path sourceDir = cachedProjectRoot.resolve(sourceDirPath);
+                if (Files.exists(sourceDir)) {
+                    initializeSourceOnlyMonitoring(sourceDir);
+                    break;  // Only need to monitor one source directory
+                }
+            }
+            return;
+        }
+
+        logger.log(Level.FINE, "Found target directory: {0}", targetDir);
+
+        // Initialize monitoring (this will prefer source directory if available)
+        initializeMonitoring(targetDir);
+    }
+
+    /**
+     * Finds the target/build output directory using cached project root.
+     */
+    private Path findTargetDirectory() {
+        return findTargetDirectoryForProject(cachedProjectRoot);
+    }
+
+    /**
+     * Initializes monitoring for source directory only (when target doesn't exist).
+     *
+     * <p>This is a fallback for scenarios where the build hasn't been run yet.
+     */
+    private synchronized void initializeSourceOnlyMonitoring(Path sourceDir) {
+        if (monitoredRoots.contains(sourceDir)) {
+            return;
+        }
+
+        try {
+            // Create WatchService if needed
+            if (watchService == null) {
+                watchService = FileSystems.getDefault().newWatchService();
+                startWatchThread();
+            }
+
+            // Create scheduler if needed
+            if (scheduler == null) {
+                scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "FxmlKit-ReloadScheduler");
+                    t.setDaemon(true);
+                    return t;
+                });
+            }
+
+            // Register source directory
+            registerDirectoryRecursive(sourceDir);
+            monitoredRoots.add(sourceDir);
+
+            logger.log(Level.INFO, "Monitoring source (no target): {0}", sourceDir);
+            watchServiceInitialized = true;
+
+        } catch (IOException e) {
+            logger.log(Level.WARNING, "Failed to initialize source-only monitoring: {0}",
+                    e.getMessage());
+        }
+    }
+
+    /**
+     * Attempts to infer the project root from the classpath.
+     *
+     * <p>This method tries multiple strategies to locate the project root:
+     * <ol>
+     *   <li>From classpath root URL (target/classes or build/classes)</li>
+     *   <li>From this class's code source location</li>
+     *   <li>From user.dir system property</li>
+     * </ol>
+     *
+     * @return the inferred project root, or null if inference fails
+     */
+    private Path tryInferProjectRootFromClasspath() {
+        // Strategy 1: Try classpath root
+        Path result = tryInferFromClasspathRoot();
+        if (result != null) {
+            logger.log(Level.FINE, "Inferred project root from classpath root: {0}", result);
+            return result;
+        }
+
+        // Strategy 2: Try code source location
+        result = tryInferFromCodeSource();
+        if (result != null) {
+            logger.log(Level.FINE, "Inferred project root from code source: {0}", result);
+            return result;
+        }
+
+        // Strategy 3: Try user.dir as fallback
+        result = tryInferFromUserDir();
+        if (result != null) {
+            logger.log(Level.FINE, "Inferred project root from user.dir: {0}", result);
+            return result;
+        }
+
+        logger.log(Level.FINE, "All project root inference strategies failed");
+        return null;
+    }
+
+    /**
+     * Strategy 1: Infer from classpath root URL.
+     */
+    private Path tryInferFromClasspathRoot() {
+        try {
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            if (cl == null) {
+                cl = HotReloadManager.class.getClassLoader();
+            }
+
+            // Try empty string to get classpath root
+            URL resourceUrl = cl.getResource("");
+            
+            if (resourceUrl == null) {
+                logger.log(Level.FINE, "Strategy 1: cl.getResource(\"\") returned null");
+                return null;
+            }
+            
+            logger.log(Level.FINE, "Strategy 1: Classpath root URL: {0}", resourceUrl);
+
+            if ("file".equals(resourceUrl.getProtocol())) {
+                Path resourcePath = Path.of(resourceUrl.toURI());
+                logger.log(Level.FINE, "Strategy 1: Classpath root path: {0}", resourcePath);
+
+                // Try to extract project root from this path
+                String pathStr = resourcePath.toString();
+                String projectRootStr = BuildSystem.extractProjectRoot(pathStr);
+                
+                if (projectRootStr != null) {
+                    Path projectRoot = Path.of(projectRootStr);
+                    logger.log(Level.FINE, "Strategy 1: Extracted project root: {0}", projectRoot);
+                    if (Files.exists(projectRoot) && looksLikeProjectRoot(projectRoot)) {
+                        return projectRoot;
+                    }
+                }
+
+                // Also try using findOutputRoot
+                Path outputRoot = BuildSystem.findOutputRoot(resourcePath);
+                if (outputRoot != null) {
+                    logger.log(Level.FINE, "Strategy 1: Found output root: {0}", outputRoot);
+                    Path projectRoot = BuildSystem.inferProjectRoot(outputRoot);
+                    if (projectRoot != null && Files.exists(projectRoot)) {
+                        return projectRoot;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.FINE, "Strategy 1 (classpath root) failed: {0}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Strategy 2: Infer from application class's code source.
+     * 
+     * <p>Scans the stack trace to find application classes (those loaded from
+     * directories rather than JARs), then extracts the project root.
+     */
+    private Path tryInferFromCodeSource() {
+        try {
+            // Use stack trace to find application classes
+            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+            for (StackTraceElement element : stack) {
+                String className = element.getClassName();
+
+                // Skip JDK internal classes (these are never in project directories)
+                if (className.startsWith("java.") ||
+                        className.startsWith("javax.") ||
+                        className.startsWith("jdk.") ||
+                        className.startsWith("sun.")) {
+                    continue;
+                }
+
+                try {
+                    Class<?> clazz = Class.forName(className);
+                    java.security.CodeSource codeSource =
+                            clazz.getProtectionDomain().getCodeSource();
+
+                    if (codeSource != null) {
+                        URL location = codeSource.getLocation();
+
+                        if (location != null && "file".equals(location.getProtocol())) {
+                            Path codePath = Path.of(location.toURI());
+
+                            // Only interested in directories (not JARs)
+                            // Classes loaded from project are in directories like target/classes
+                            if (Files.isDirectory(codePath)) {
+                                logger.log(Level.FINE, "Found directory code source for {0}: {1}",
+                                        new Object[]{className, codePath});
+
+                                // Try to extract project root from this path
+                                String pathStr = codePath.toString();
+                                String projectRootStr = BuildSystem.extractProjectRoot(pathStr);
+                                
+                                if (projectRootStr != null) {
+                                    Path projectRoot = Path.of(projectRootStr);
+                                    if (Files.exists(projectRoot) && looksLikeProjectRoot(projectRoot)) {
+                                        return projectRoot;
+                                    }
+                                }
+
+                                // Also try using findOutputRoot + inferProjectRoot
+                                Path outputRoot = BuildSystem.findOutputRoot(codePath);
+                                if (outputRoot != null) {
+                                    Path projectRoot = BuildSystem.inferProjectRoot(outputRoot);
+                                    if (projectRoot != null && Files.exists(projectRoot)) {
+                                        return projectRoot;
+                                    }
+                                }
+                            }
+                            // Skip JAR files silently (don't log them)
+                        }
+                    }
+                } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                    // Class not accessible, continue to next
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.FINE, "Strategy 2 (code source) failed: {0}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Strategy 3: Infer from user.dir system property.
+     */
+    private Path tryInferFromUserDir() {
+        try {
+            String userDir = System.getProperty("user.dir");
+            if (userDir != null) {
+                Path userDirPath = Path.of(userDir);
+                logger.log(Level.FINE, "user.dir: {0}", userDirPath);
+
+                if (looksLikeProjectRoot(userDirPath)) {
+                    return userDirPath;
+                }
+
+                // Maybe we're in a subdirectory, try parent
+                Path parent = userDirPath.getParent();
+                if (looksLikeProjectRoot(parent)) {
+                    return parent;
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.FINE, "Strategy 3 (user.dir) failed: {0}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a directory looks like a project root.
+     *
+     * <p>Delegates to {@link BuildSystem#looksLikeProjectRoot(Path)}.
+     */
+    private boolean looksLikeProjectRoot(Path dir) {
+        return BuildSystem.looksLikeProjectRoot(dir);
+    }
+
+    /**
+     * Sets the project root directory for hot reload.
+     *
+     * <p>This method allows manual configuration of the project root when
+     * auto-detection fails or when using a non-standard project structure.
+     *
+     * <p>Call this before enabling hot reload:
+     * <pre>{@code
+     * FxmlKit.setProjectRoot(Path.of("/path/to/project"));
+     * FxmlKit.enableDevelopmentMode();
+     * }</pre>
+     *
+     * @param projectRoot the project root directory
+     */
+    public synchronized void setProjectRoot(Path projectRoot) {
+        this.cachedProjectRoot = projectRoot;
+        logger.log(Level.INFO, "Project root set to: {0}", projectRoot);
+
+        if (cssHotReloadEnabled && projectRoot != null) {
+            globalCssMonitor.setProjectRoot(projectRoot);
+            initializeCssOnlyMonitoring();
+        }
+    }
+
+    /**
+     * Returns the current project root.
+     *
+     * @return the project root, or null if not set
+     */
+    public Path getProjectRoot() {
+        return cachedProjectRoot;
     }
 
     /**

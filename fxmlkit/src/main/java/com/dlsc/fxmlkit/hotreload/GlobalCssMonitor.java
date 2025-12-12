@@ -15,6 +15,7 @@ import javafx.stage.Window;
 
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -136,8 +137,28 @@ public final class GlobalCssMonitor {
      */
     private ListChangeListener<Window> windowListListener;
 
+    /**
+     * Callback to notify HotReloadManager when a new project root is discovered.
+     * This is set by HotReloadManager after construction.
+     */
+    private java.util.function.Consumer<Path> onProjectRootDiscovered;
+
+    /**
+     * Set of project roots that have already been reported via callback.
+     */
+    private final Set<Path> reportedProjectRoots = new HashSet<>();
+
     public GlobalCssMonitor() {
         setupApplicationUserAgentStylesheetBridge();
+    }
+
+    /**
+     * Sets the callback for when a new project root is discovered from stylesheet URIs.
+     *
+     * @param callback the callback to invoke with the discovered project root
+     */
+    public void setOnProjectRootDiscovered(java.util.function.Consumer<Path> callback) {
+        this.onProjectRootDiscovered = callback;
     }
 
     /**
@@ -701,6 +722,9 @@ public final class GlobalCssMonitor {
     /**
      * Registers a single stylesheet URI.
      * Checks if the owner is already registered to prevent duplicate entries.
+     *
+     * <p>Also attempts to discover the project root from the stylesheet URI
+     * and notifies HotReloadManager if a new project is found.
      */
     private void registerStylesheetUri(String uri, ObservableList<String> owner) {
         String resourcePath = StylesheetUriConverter.toResourcePath(uri);
@@ -721,6 +745,60 @@ public final class GlobalCssMonitor {
 
         owners.add(new WeakReference<>(owner));
         logger.log(Level.FINE, "Registered stylesheet: {0}", resourcePath);
+
+        // Try to discover project root from this URI
+        tryDiscoverProjectRootFromUri(uri);
+    }
+
+    /**
+     * Attempts to discover and report a project root from a stylesheet URI.
+     *
+     * <p>This enables CSS hot reload to work in multi-module projects by
+     * automatically detecting the correct project root from stylesheet locations.
+     */
+    private void tryDiscoverProjectRootFromUri(String uri) {
+        if (uri == null || !uri.startsWith("file:")) {
+            return;
+        }
+
+        try {
+            // Parse the URI to get the file path
+            URI parsedUri = URI.create(uri);
+            Path filePath = Path.of(parsedUri);
+            String pathStr = filePath.toString();
+
+            logger.log(Level.FINE, "Checking stylesheet path for project root: {0}", pathStr);
+
+            // Extract project root from the path
+            String projectRootStr = BuildSystem.extractProjectRoot(pathStr);
+            if (projectRootStr == null) {
+                logger.log(Level.FINE, "Could not extract project root from: {0}", pathStr);
+                return;
+            }
+
+            Path discoveredRoot = Path.of(projectRootStr);
+
+            // Check if this is a new project root
+            if (!reportedProjectRoots.contains(discoveredRoot)) {
+                reportedProjectRoots.add(discoveredRoot);
+
+                logger.log(Level.INFO, "Discovered project root from stylesheet: {0}", discoveredRoot);
+
+                // Notify HotReloadManager if callback is set
+                if (onProjectRootDiscovered != null) {
+                    onProjectRootDiscovered.accept(discoveredRoot);
+                }
+
+                // Update our own project root if not set or if this is different
+                if (projectRoot == null || !projectRoot.equals(discoveredRoot)) {
+                    projectRoot = discoveredRoot;
+                    logger.log(Level.FINE, "Updated GlobalCssMonitor project root to: {0}", discoveredRoot);
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.FINE, "Failed to discover project root from URI: {0} - {1}",
+                    new Object[]{uri, e.getMessage()});
+        }
     }
 
     /**

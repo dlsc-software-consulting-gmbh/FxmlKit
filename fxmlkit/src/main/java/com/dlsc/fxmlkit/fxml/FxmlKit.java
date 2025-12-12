@@ -2,12 +2,13 @@ package com.dlsc.fxmlkit.fxml;
 
 import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.core.LiteDiAdapter;
-import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.GlobalCssMonitor;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.StylesheetUriConverter;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 import javafx.beans.property.StringProperty;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -82,6 +83,46 @@ public final class FxmlKit {
     public static void disableDevelopmentMode() {
         setFxmlHotReloadEnabled(false);
         setCssHotReloadEnabled(false);
+    }
+
+    /**
+     * Sets the project root directory for hot reload.
+     *
+     * <p>This method allows manual configuration of the project root when
+     * auto-detection fails or when using a non-standard project structure.
+     *
+     * <p>In most cases, FxmlKit can auto-detect the project root from the classpath.
+     * Use this method only when auto-detection fails (you'll see a warning in the logs).
+     *
+     * <p>Call this before enabling hot reload:
+     * <pre>{@code
+     * FxmlKit.setProjectRoot(Path.of("/path/to/project"));
+     * FxmlKit.enableDevelopmentMode();
+     * }</pre>
+     *
+     * <p>Or after enabling, if you forgot:
+     * <pre>{@code
+     * FxmlKit.enableDevelopmentMode();
+     * FxmlKit.setProjectRoot(Path.of("/path/to/project"));
+     * }</pre>
+     *
+     * @param projectRoot the project root directory containing pom.xml or build.gradle
+     * @see #getProjectRoot()
+     */
+    public static void setProjectRoot(Path projectRoot) {
+        HotReloadManager.getInstance().setProjectRoot(projectRoot);
+    }
+
+    /**
+     * Returns the current project root used for hot reload.
+     *
+     * <p>This returns the auto-detected or manually configured project root.
+     *
+     * @return the project root, or null if not set
+     * @see #setProjectRoot(Path)
+     */
+    public static Path getProjectRoot() {
+        return HotReloadManager.getInstance().getProjectRoot();
     }
 
     /**

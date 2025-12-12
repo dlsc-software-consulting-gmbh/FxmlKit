@@ -2,6 +2,8 @@ package com.dlsc.fxmlkit.hotreload;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Enumeration of supported build systems and their directory conventions.
@@ -497,5 +499,113 @@ public enum BuildSystem {
     public static Path inferProjectRoot(Path outputDir) {
         String projectRoot = extractProjectRoot(outputDir.toString());
         return projectRoot != null ? Path.of(projectRoot) : null;
+    }
+
+    // ==================== Output Directory Discovery ====================
+
+    /**
+     * Gets all main (non-test) output directory paths without slashes.
+     *
+     * <p>These paths are relative to project root and can be used to check
+     * which build system output exists.
+     *
+     * <p>Example output: ["target/classes", "build/classes/java/main", "build/resources/main", ...]
+     *
+     * @return array of output directory paths (without leading/trailing slashes)
+     */
+    public static String[] getMainOutputDirectoryPaths() {
+        Set<String> paths = new LinkedHashSet<>();  // Preserve order, avoid duplicates
+        for (BuildSystem bs : values()) {
+            if (!bs.isTest()) {
+                // "/target/classes/" → "target/classes"
+                String path = bs.outputMarker.substring(1, bs.outputMarker.length() - 1);
+                paths.add(path);
+            }
+        }
+        return paths.toArray(new String[0]);
+    }
+
+    /**
+     * Gets all main (non-test) source directory paths.
+     *
+     * <p>Returns the most common source directories that indicate a project root.
+     *
+     * @return array of source directory paths
+     */
+    public static String[] getMainSourceDirectoryPaths() {
+        return new String[] {
+                "src/main/resources",
+                "src/main/java",
+                "src/main/kotlin"
+        };
+    }
+
+    /**
+     * Gets all project marker files that indicate a project root.
+     *
+     * @return array of project marker file names
+     */
+    public static String[] getProjectMarkerFiles() {
+        return new String[] {
+                "pom.xml",
+                "build.gradle",
+                "build.gradle.kts"
+        };
+    }
+
+    /**
+     * Finds the first existing output directory for a project.
+     *
+     * <p>Iterates through all known output directory paths and returns
+     * the first one that exists.
+     *
+     * @param projectRoot the project root directory
+     * @return the first existing output directory, or null if none found
+     */
+    public static Path findExistingOutputDirectory(Path projectRoot) {
+        if (projectRoot == null) {
+            return null;
+        }
+        for (String outputPath : getMainOutputDirectoryPaths()) {
+            Path dir = projectRoot.resolve(outputPath);
+            if (Files.exists(dir)) {
+                return dir;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a directory looks like a project root.
+     *
+     * <p>A directory is considered a project root if it contains:
+     * <ul>
+     *   <li>A build file (pom.xml, build.gradle, build.gradle.kts), or</li>
+     *   <li>A source directory (src/main/resources, src/main/java, src/main/kotlin)</li>
+     * </ul>
+     *
+     * @param dir the directory to check
+     * @return true if the directory looks like a project root
+     */
+    public static boolean looksLikeProjectRoot(Path dir) {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return false;
+        }
+
+        // Check for build marker files
+        for (String marker : getProjectMarkerFiles()) {
+            if (Files.exists(dir.resolve(marker))) {
+                return true;
+            }
+        }
+
+        // Check for source directories
+        for (String sourceDir : getMainSourceDirectoryPaths()) {
+            if (Files.exists(dir.resolve(sourceDir))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
