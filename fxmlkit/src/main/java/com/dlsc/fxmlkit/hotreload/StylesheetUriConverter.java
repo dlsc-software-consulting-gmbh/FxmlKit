@@ -39,25 +39,22 @@ public final class StylesheetUriConverter {
         }
 
         try {
-            // Strip query parameters (e.g., ?t=1234567890 for cache busting)
-            String cleanUri = stripQueryParams(uri);
-
             // Handle file:// URIs
-            if (cleanUri.startsWith("file:")) {
-                return extractResourcePathFromFileUri(cleanUri);
+            if (uri.startsWith("file:")) {
+                return extractResourcePathFromFileUri(uri);
             }
 
             // Handle jar:// URIs
-            if (cleanUri.startsWith("jar:")) {
-                int bangIndex = cleanUri.indexOf("!/");
+            if (uri.startsWith("jar:")) {
+                int bangIndex = uri.indexOf("!/");
                 if (bangIndex >= 0) {
-                    return cleanUri.substring(bangIndex + 2);
+                    return uri.substring(bangIndex + 2);
                 }
             }
 
             // Handle classpath-relative paths (already resource path format)
-            if (!cleanUri.contains(":") && !cleanUri.startsWith("/")) {
-                return cleanUri;
+            if (!uri.contains(":") && !uri.startsWith("/")) {
+                return uri;
             }
 
             return null;
@@ -65,37 +62,6 @@ public final class StylesheetUriConverter {
             logger.log(Level.FINE, "Failed to convert URI to resource path: {0}", uri);
             return null;
         }
-    }
-
-    /**
-     * Strips query parameters from a URI string.
-     * Used to remove cache-busting timestamps like ?t=1234567890.
-     *
-     * @param uri the URI string
-     * @return the URI without query parameters
-     */
-    private static String stripQueryParams(String uri) {
-        int questionMarkIndex = uri.indexOf('?');
-        return (questionMarkIndex >= 0) ? uri.substring(0, questionMarkIndex) : uri;
-    }
-
-    /**
-     * Strips timestamp query parameter from URI.
-     * Handles URIs like "file:///path/style.css?t=1234567890".
-     *
-     * <p>This is used for cache-busting: JavaFX's StyleManager caches stylesheets
-     * by URI string, so we add timestamps to force reload. This method removes
-     * old timestamps before adding new ones.
-     *
-     * @param uri the URI string (may contain ?t=timestamp)
-     * @return the URI without timestamp parameter
-     */
-    public static String stripTimestamp(String uri) {
-        if (uri == null) {
-            return null;
-        }
-        int timestampIndex = uri.indexOf("?t=");
-        return (timestampIndex >= 0) ? uri.substring(0, timestampIndex) : uri;
     }
 
     /**
