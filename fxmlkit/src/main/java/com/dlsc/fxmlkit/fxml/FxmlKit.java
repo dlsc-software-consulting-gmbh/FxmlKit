@@ -9,10 +9,10 @@ import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 import javafx.beans.property.StringProperty;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -32,13 +32,13 @@ public final class FxmlKit {
 
     private static final String ROOT_PACKAGE_NAME = "com.dlsc.fxmlkit";
 
-    private static volatile Level globalLogLevel = Level.WARNING;
-    private static volatile DiAdapter globalDiAdapter = null;
-    private static volatile boolean autoAttachStyles = true;
-    private static volatile FxmlInjectionPolicy fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
+    private static Level globalLogLevel = Level.WARNING;
+    private static DiAdapter globalDiAdapter = null;
+    private static boolean autoAttachStyles = true;
+    private static FxmlInjectionPolicy fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
 
-    private static final Set<Class<?>> INCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
-    private static final Set<Class<?>> EXCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
+    private static final Set<Class<?>> INCLUDE_NODE_TYPES = new HashSet<>();
+    private static final Set<Class<?>> EXCLUDE_NODE_TYPES = new HashSet<>();
 
     private static final List<String> DEFAULT_SKIP_PACKAGE_PREFIXES = List.of(
             "java.",
@@ -63,8 +63,13 @@ public final class FxmlKit {
      *
      * <p>CSS hot reload covers all stylesheet types including User Agent Stylesheets.
      *
+     * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload is
+     * disabled by default due to style priority changes. Enable separately via
+     * {@link #setControlUAHotReloadEnabled(boolean)} if needed.
+     *
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
+     * @see #setControlUAHotReloadEnabled(boolean)
      */
     public static void enableDevelopmentMode() {
         setFxmlHotReloadEnabled(true);
@@ -106,6 +111,9 @@ public final class FxmlKit {
      *   <li>User Agent Stylesheets (Application, Scene, SubScene)</li>
      * </ul>
      *
+     * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload
+     * requires separate enablement via {@link #setControlUAHotReloadEnabled(boolean)}.
+     *
      * @param enabled true to enable, false to disable
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
@@ -119,6 +127,42 @@ public final class FxmlKit {
      */
     public static boolean isCssHotReloadEnabled() {
         return HotReloadManager.getInstance().isCssHotReloadEnabled();
+    }
+
+    /**
+     * Enables or disables hot reload for Control {@code getUserAgentStylesheet()}.
+     *
+     * <p><b>Warning:</b> Enabling this feature changes CSS priority semantics!
+     *
+     * <p>To support hot reload, custom control User Agent Stylesheets are "promoted"
+     * to the control's {@code getStylesheets()} list. This causes them to become
+     * author-level stylesheets instead of UA-level stylesheets, which may alter
+     * style cascade behavior:
+     * <ul>
+     *   <li>Original UA stylesheet: lowest priority, easily overridden</li>
+     *   <li>Promoted stylesheet: author-level priority, may override user styles</li>
+     * </ul>
+     *
+     * <p><b>Recommendation:</b> Only enable during development for controls that
+     * need hot reload. Keep disabled in production or when style priority matters.
+     *
+     * <p>Default: disabled
+     *
+     * @param enabled true to enable (with priority change warning), false to disable
+     * @see #isControlUAHotReloadEnabled()
+     */
+    public static void setControlUAHotReloadEnabled(boolean enabled) {
+        HotReloadManager.getInstance().getGlobalCssMonitor().setControlUAHotReloadEnabled(enabled);
+    }
+
+    /**
+     * Returns whether Control {@code getUserAgentStylesheet()} hot reload is enabled.
+     *
+     * @return true if enabled
+     * @see #setControlUAHotReloadEnabled(boolean)
+     */
+    public static boolean isControlUAHotReloadEnabled() {
+        return HotReloadManager.getInstance().getGlobalCssMonitor().isControlUAHotReloadEnabled();
     }
 
     /**

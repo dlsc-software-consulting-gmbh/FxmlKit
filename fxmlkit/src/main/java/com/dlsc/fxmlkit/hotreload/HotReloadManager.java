@@ -30,6 +30,10 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -42,10 +46,11 @@ import java.util.logging.Logger;
  * <p>Features:
  * <ul>
  *   <li>Automatic file change detection via WatchService</li>
- *   <li>Dual directory monitoring (source and target/classes)</li>
+ *   <li>Source directory monitoring with automatic sync to target (preferred)</li>
+ *   <li>Fallback to target directory monitoring when source is unavailable</li>
  *   <li>Dependency propagation for fx:include hierarchies</li>
  *   <li>CSS/BSS stylesheet change detection and refresh</li>
- *   <li>Debouncing to prevent duplicate reloads</li>
+ *   <li>Debouncing to prevent duplicate reloads and handle partial file writes</li>
  *   <li>Thread-safe component registration</li>
  *   <li>Support for multi-module Maven/Gradle projects</li>
  * </ul>
@@ -72,13 +77,15 @@ import java.util.logging.Logger;
  * FxmlKit.disableDevelopmentMode();
  * }</pre>
  *
- * <p>Architecture:
+ * <p>Architecture (source monitoring - preferred):
  * <pre>
- * File Change (src or target)
+ * Source File Change (src/main/resources)
  *     ↓
  * WatchService Thread
  *     ↓
- * Debounce Check (300ms window)
+ * Sync to Target (copy file to target/classes)
+ *     ↓
+ * Schedule Reload (debounce 200ms)
  *     ↓
  * Dependency Analysis (BFS for fx:include / CSS mapping)
  *     ↓
@@ -87,10 +94,22 @@ import java.util.logging.Logger;
  * Component.reload() on JavaFX Thread
  * </pre>
  *
+ * <p>Architecture (target monitoring - fallback):
+ * <pre>
+ * Target File Change (target/classes)
+ *     ↓
+ * WatchService Thread
+ *     ↓
+ * Schedule Reload (debounce 200ms)
+ *     ↓
+ * Component.reload() on JavaFX Thread
+ * </pre>
+ *
  * <p>All public methods are thread-safe. Internal state is protected by
  * ConcurrentHashMap and synchronized blocks where necessary.
  *
  * @see HotReloadable
+ * @see BuildSystem
  */
 public final class HotReloadManager {
 
@@ -103,8 +122,10 @@ public final class HotReloadManager {
 
     /**
      * Debounce window in milliseconds.
+     * This delay allows files to stabilize after editors write them
+     * (some editors write in multiple steps).
      */
-    private static final long DEBOUNCE_MILLIS = 300;
+    private static final long DEBOUNCE_MILLIS = 200;
 
     /**
      * Whether FXML hot reload is enabled.
@@ -130,6 +151,24 @@ public final class HotReloadManager {
      * Background thread for watch loop.
      */
     private Thread watchThread;
+
+    /**
+     * Scheduler for debounced reload execution.
+     * Ensures files are fully written before triggering reload.
+     */
+    private ScheduledExecutorService scheduler;
+
+    /**
+     * Pending FXML reload tasks, keyed by resource path.
+     * Used to cancel and reschedule when new events arrive.
+     */
+    private final Map<String, ScheduledFuture<?>> pendingFxmlReloads = new ConcurrentHashMap<>();
+
+    /**
+     * Pending CSS reload tasks, keyed by resource path.
+     * Used to cancel and reschedule when new events arrive.
+     */
+    private final Map<String, ScheduledFuture<?>> pendingCssReloads = new ConcurrentHashMap<>();
 
     /**
      * Maps WatchKeys to their monitored directory paths.
@@ -161,11 +200,6 @@ public final class HotReloadManager {
      * Value: Set of FXML paths using this stylesheet
      */
     private final Map<String, Set<String>> stylesheetToFxml = new ConcurrentHashMap<>();
-
-    /**
-     * Tracks last reload time per resource path for debouncing.
-     */
-    private final Map<String, Long> lastReloadTime = new ConcurrentHashMap<>();
 
     /**
      * Cached project root for global CSS monitoring.
@@ -339,9 +373,23 @@ public final class HotReloadManager {
     }
 
     /**
-     * Stops the WatchService and releases resources.
+     * Stops the WatchService, scheduler, and releases resources.
      */
     private synchronized void stopWatchService() {
+        // Cancel all pending reload tasks
+        cancelAllPendingReloads();
+
+        // Shutdown scheduler
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            try {
+                scheduler.awaitTermination(1, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            scheduler = null;
+        }
+
         // Stop watch thread
         if (watchThread != null) {
             watchThread.interrupt();
@@ -371,6 +419,21 @@ public final class HotReloadManager {
     }
 
     /**
+     * Cancels all pending reload tasks.
+     */
+    private void cancelAllPendingReloads() {
+        for (ScheduledFuture<?> future : pendingFxmlReloads.values()) {
+            future.cancel(false);
+        }
+        pendingFxmlReloads.clear();
+
+        for (ScheduledFuture<?> future : pendingCssReloads.values()) {
+            future.cancel(false);
+        }
+        pendingCssReloads.clear();
+    }
+
+    /**
      * Initializes directory monitoring based on a component's FXML location.
      */
     private synchronized void initializeMonitoringFromComponent(HotReloadable component) {
@@ -381,7 +444,7 @@ public final class HotReloadManager {
 
         try {
             Path fxmlPath = Path.of(fxmlUrl.toURI());
-            Path targetDir = findTargetRoot(fxmlPath);
+            Path targetDir = BuildSystem.findOutputRoot(fxmlPath);
 
             if (targetDir != null && !monitoredRoots.contains(targetDir)) {
                 initializeMonitoring(targetDir);
@@ -393,45 +456,38 @@ public final class HotReloadManager {
     }
 
     /**
-     * Finds the target/classes root directory from an FXML path.
-     */
-    private Path findTargetRoot(Path fxmlPath) {
-        String pathStr = fxmlPath.toString();
-
-        // Maven: find target/classes
-        int idx = pathStr.indexOf("/target/classes/");
-        if (idx < 0) {
-            idx = pathStr.indexOf("\\target\\classes\\");
-        }
-        if (idx >= 0) {
-            return Path.of(pathStr.substring(0, idx + "/target/classes".length()));
-        }
-
-        // Gradle: find build/classes/java/main
-        idx = pathStr.indexOf("/build/classes/java/main/");
-        if (idx < 0) {
-            idx = pathStr.indexOf("\\build\\classes\\java\\main\\");
-        }
-        if (idx >= 0) {
-            return Path.of(pathStr.substring(0, idx + "/build/classes/java/main".length()));
-        }
-
-        // Gradle: find build/resources/main
-        idx = pathStr.indexOf("/build/resources/main/");
-        if (idx < 0) {
-            idx = pathStr.indexOf("\\build\\resources\\main\\");
-        }
-        if (idx >= 0) {
-            return Path.of(pathStr.substring(0, idx + "/build/resources/main".length()));
-        }
-
-        return null;
-    }
-
-    /**
      * Initializes the WatchService and starts monitoring directories.
+     *
+     * <p>Prefers monitoring source directories for faster hot reload.
+     * When source files change, they are synced to target and reload
+     * is triggered immediately. Falls back to target monitoring if
+     * source directory cannot be determined.
      */
     private synchronized void initializeMonitoring(Path targetDir) {
+        // Infer source directory from target
+        Path sourceDir = BuildSystem.inferSourceDirectory(targetDir);
+
+        // Determine which directory to monitor
+        Path dirToMonitor;
+        boolean isSourceMonitoring;
+
+        if (sourceDir != null && Files.exists(sourceDir)) {
+            // Prefer source directory (faster hot reload)
+            dirToMonitor = sourceDir;
+            isSourceMonitoring = true;
+        } else {
+            // Fallback to target directory
+            dirToMonitor = targetDir;
+            isSourceMonitoring = false;
+            logger.log(Level.FINE,
+                    "Source directory not found, falling back to target: {0}", targetDir);
+        }
+
+        // Skip if already monitoring this directory
+        if (monitoredRoots.contains(dirToMonitor)) {
+            return;
+        }
+
         try {
             // Create WatchService if needed
             if (watchService == null) {
@@ -439,24 +495,30 @@ public final class HotReloadManager {
                 startWatchThread();
             }
 
-            // Register target directory
-            registerDirectoryRecursive(targetDir);
-            monitoredRoots.add(targetDir);
-            logger.log(Level.INFO, "Monitoring target: {0}", targetDir);
+            // Create scheduler if needed
+            if (scheduler == null) {
+                scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "FxmlKit-ReloadScheduler");
+                    t.setDaemon(true);
+                    return t;
+                });
+            }
 
-            // Infer and register source directory
-            Path sourceDir = inferSourceDirectory(targetDir);
-            if (sourceDir != null && Files.exists(sourceDir) && !monitoredRoots.contains(sourceDir)) {
-                registerDirectoryRecursive(sourceDir);
-                monitoredRoots.add(sourceDir);
-                logger.log(Level.INFO, "Monitoring source: {0}", sourceDir);
+            // Register directory
+            registerDirectoryRecursive(dirToMonitor);
+            monitoredRoots.add(dirToMonitor);
+
+            if (isSourceMonitoring) {
+                logger.log(Level.INFO, "Monitoring source: {0}", dirToMonitor);
+            } else {
+                logger.log(Level.INFO, "Monitoring target: {0}", dirToMonitor);
             }
 
             watchServiceInitialized = true;
 
             // Cache project root for global CSS monitor
             if (cachedProjectRoot == null) {
-                cachedProjectRoot = StylesheetUriConverter.inferProjectRoot(targetDir);
+                cachedProjectRoot = BuildSystem.inferProjectRoot(targetDir);
                 if (cachedProjectRoot != null) {
                     logger.log(Level.FINE, "Cached project root: {0}", cachedProjectRoot);
                     // Update GlobalCssMonitor if CSS hot reload is enabled
@@ -473,33 +535,6 @@ public final class HotReloadManager {
         } catch (IOException e) {
             logger.log(Level.WARNING, "Failed to initialize monitoring: {0}", e.getMessage());
         }
-    }
-
-    /**
-     * Infers the source directory from the target directory.
-     */
-    private Path inferSourceDirectory(Path targetDir) {
-        String path = targetDir.toString();
-
-        // Maven: target/classes -> src/main/resources
-        if (path.contains("/target/classes") || path.contains("\\target\\classes")) {
-            String projectPath = path.replaceAll("[/\\\\]target[/\\\\]classes.*", "");
-            return Path.of(projectPath, "src", "main", "resources");
-        }
-
-        // Gradle: build/classes/java/main -> src/main/resources
-        if (path.contains("/build/classes/java/main") || path.contains("\\build\\classes\\java\\main")) {
-            String projectPath = path.replaceAll("[/\\\\]build[/\\\\]classes[/\\\\]java[/\\\\]main.*", "");
-            return Path.of(projectPath, "src", "main", "resources");
-        }
-
-        // Gradle: build/resources/main -> src/main/resources
-        if (path.contains("/build/resources/main") || path.contains("\\build\\resources\\main")) {
-            String projectPath = path.replaceAll("[/\\\\]build[/\\\\]resources[/\\\\]main.*", "");
-            return Path.of(projectPath, "src", "main", "resources");
-        }
-
-        return null;
     }
 
     /**
@@ -591,6 +626,9 @@ public final class HotReloadManager {
 
     /**
      * Processes a file change event.
+     *
+     * <p>Source changes trigger sync to target followed by immediate reload.
+     * Target changes (fallback mode) trigger reload directly without sync.
      */
     private void processFileChange(Path changedFile, Path watchedDir, WatchEvent.Kind<?> kind) {
         String fileName = changedFile.getFileName().toString();
@@ -611,35 +649,80 @@ public final class HotReloadManager {
             return;  // Not a supported file type
         }
 
-        // Determine if this is a source or target change
-        boolean isSourceChange = isSourceDirectory(watchedDir);
-
         // Calculate resource path
         String resourcePath = calculateResourcePath(changedFile, watchedDir);
         if (resourcePath == null) {
             return;
         }
 
-        logger.log(Level.FINE, "File {0}: {1} [{2}]",
-                new Object[]{kind.name(), resourcePath, isSourceChange ? "SOURCE" : "TARGET"});
+        logger.log(Level.FINE, "File {0}: {1}", new Object[]{kind.name(), resourcePath});
 
-        // Sync source to target if needed
-        if (isSourceChange && kind != StandardWatchEventKinds.ENTRY_DELETE) {
+        // Sync to target only if monitoring source directory
+        boolean isSourceDir = BuildSystem.isSourcePath(watchedDir.toString());
+        if (isSourceDir && kind != StandardWatchEventKinds.ENTRY_DELETE) {
             syncToTarget(changedFile, watchedDir);
         }
 
-        // Debounce check
-        if (!shouldReload(resourcePath)) {
-            logger.log(Level.FINEST, "Debounced: {0}", resourcePath);
-            return;
+        // Schedule reload
+        if (isFxml) {
+            scheduleFxmlReload(resourcePath);
+        } else {
+            scheduleCssReload(resourcePath);
+        }
+    }
+
+    /**
+     * Schedules an FXML reload with debouncing.
+     *
+     * <p>If a reload is already pending for this resource, it will be cancelled
+     * and rescheduled. This ensures we wait for the file to stabilize before reloading.
+     *
+     * @param resourcePath the resource path that changed
+     */
+    private void scheduleFxmlReload(String resourcePath) {
+        // Cancel any pending reload for this resource
+        ScheduledFuture<?> existing = pendingFxmlReloads.remove(resourcePath);
+        if (existing != null) {
+            existing.cancel(false);
+            logger.log(Level.FINEST, "Cancelled pending FXML reload: {0}", resourcePath);
         }
 
-        // Find affected components and reload
-        if (isFxml) {
+        // Schedule new reload after debounce delay
+        ScheduledFuture<?> future = scheduler.schedule(() -> {
+            pendingFxmlReloads.remove(resourcePath);
             processFxmlChange(resourcePath);
-        } else {
-            processCssChange(resourcePath);
+        }, DEBOUNCE_MILLIS, TimeUnit.MILLISECONDS);
+
+        pendingFxmlReloads.put(resourcePath, future);
+        logger.log(Level.FINEST, "Scheduled FXML reload in {0}ms: {1}",
+                new Object[]{DEBOUNCE_MILLIS, resourcePath});
+    }
+
+    /**
+     * Schedules a CSS reload with debouncing.
+     *
+     * <p>If a reload is already pending for this resource, it will be cancelled
+     * and rescheduled. This ensures we wait for the file to stabilize before reloading.
+     *
+     * @param resourcePath the resource path that changed
+     */
+    private void scheduleCssReload(String resourcePath) {
+        // Cancel any pending reload for this resource
+        ScheduledFuture<?> existing = pendingCssReloads.remove(resourcePath);
+        if (existing != null) {
+            existing.cancel(false);
+            logger.log(Level.FINEST, "Cancelled pending CSS reload: {0}", resourcePath);
         }
+
+        // Schedule new reload after debounce delay
+        ScheduledFuture<?> future = scheduler.schedule(() -> {
+            pendingCssReloads.remove(resourcePath);
+            processCssChange(resourcePath);
+        }, DEBOUNCE_MILLIS, TimeUnit.MILLISECONDS);
+
+        pendingCssReloads.put(resourcePath, future);
+        logger.log(Level.FINEST, "Scheduled CSS reload in {0}ms: {1}",
+                new Object[]{DEBOUNCE_MILLIS, resourcePath});
     }
 
     /**
@@ -675,6 +758,10 @@ public final class HotReloadManager {
 
     /**
      * Performs full reload for affected components.
+     *
+     * <p>After FXML reload, all CSS stylesheets are refreshed with new timestamps
+     * to ensure the latest styles are applied. This fixes the issue where JavaFX's
+     * StyleManager cache causes stale CSS to be displayed after FXML reload.
      */
     private void reloadComponentsFull(Set<String> affectedPaths) {
         Set<HotReloadable> componentsToReload = collectComponents(affectedPaths);
@@ -695,6 +782,10 @@ public final class HotReloadManager {
                             new Object[]{component.getClass().getSimpleName(), e.getMessage()});
                 }
             }
+
+            // After FXML reload, refresh all CSS with new timestamps to bypass cache
+            globalCssMonitor.refreshAllStylesheets();
+
             logger.log(Level.INFO, "Hot reload complete");
         });
     }
@@ -746,20 +837,29 @@ public final class HotReloadManager {
 
     /**
      * Refreshes stylesheets for a Parent node and all its children.
+     *
+     * <p>Uses timestamp query parameter to force JavaFX to reload the stylesheet.
+     * JavaFX's StyleManager caches stylesheets by URI string, so we must use
+     * a unique URI each time to bypass the cache.
      */
     private void refreshStylesheets(Parent root, String cssResourcePath, String sourceFileUri) {
+        long timestamp = System.currentTimeMillis();
+        refreshStylesheetsRecursive(root, cssResourcePath, timestamp);
+    }
+
+    /**
+     * Recursively refreshes stylesheets with shared timestamp.
+     */
+    private void refreshStylesheetsRecursive(Parent root, String cssResourcePath, long timestamp) {
         ObservableList<String> stylesheets = root.getStylesheets();
         for (int i = 0; i < stylesheets.size(); i++) {
             String uri = stylesheets.get(i);
             if (StylesheetUriConverter.matchesResourcePath(uri, cssResourcePath)) {
-                if (sourceFileUri != null) {
-                    // Replace with file:// URI to bypass cache
-                    stylesheets.set(i, sourceFileUri);
-                } else {
-                    // Fallback: remove and re-add
-                    stylesheets.remove(i);
-                    stylesheets.add(i, uri);
-                }
+                // Strip existing timestamp and add new one to bust cache
+                String baseUri = StylesheetUriConverter.stripTimestamp(uri);
+                String newUri = baseUri + "?t=" + timestamp;
+                stylesheets.remove(i);
+                stylesheets.add(i, newUri);
             }
         }
 
@@ -768,7 +868,7 @@ public final class HotReloadManager {
             if (child instanceof Parent) {
                 // Intentional: traditional instanceof for backward compatibility.
                 Parent childParent = (Parent) child;
-                refreshStylesheets(childParent, cssResourcePath, sourceFileUri);
+                refreshStylesheetsRecursive(childParent, cssResourcePath, timestamp);
             }
         }
     }
@@ -926,33 +1026,11 @@ public final class HotReloadManager {
         // Handle JAR URLs
         int bangIndex = path.indexOf("!/");
         if (bangIndex >= 0) {
-            path = path.substring(bangIndex + 2);
+            return path.substring(bangIndex + 2);
         }
 
-        // Remove /classes/ prefix (Maven)
-        int classesIndex = path.indexOf("/classes/");
-        if (classesIndex >= 0) {
-            return path.substring(classesIndex + "/classes/".length());
-        }
-
-        // Remove /build/classes/java/main/ prefix (Gradle)
-        int gradleIndex = path.indexOf("/build/classes/java/main/");
-        if (gradleIndex >= 0) {
-            return path.substring(gradleIndex + "/build/classes/java/main/".length());
-        }
-
-        // Remove /build/resources/main/ prefix (Gradle)
-        int resourcesIndex = path.indexOf("/build/resources/main/");
-        if (resourcesIndex >= 0) {
-            return path.substring(resourcesIndex + "/build/resources/main/".length());
-        }
-
-        // Remove leading slash
-        if (path.startsWith("/")) {
-            path = path.substring(1);
-        }
-
-        return path;
+        // Use BuildSystem to extract resource path
+        return BuildSystem.extractResourcePath(path);
     }
 
     /**
@@ -983,14 +1061,6 @@ public final class HotReloadManager {
     private String getParentPath(String path) {
         int lastSlash = path.lastIndexOf('/');
         return (lastSlash > 0) ? path.substring(0, lastSlash) : null;
-    }
-
-    /**
-     * Checks if a directory is a source directory (vs target).
-     */
-    private boolean isSourceDirectory(Path dir) {
-        String path = dir.toString();
-        return path.contains("/src/main/resources") || path.contains("\\src\\main\\resources");
     }
 
     /**
@@ -1031,7 +1101,7 @@ public final class HotReloadManager {
             return;
         }
 
-        Path targetRoot = inferTargetDirectory(sourceRoot);
+        Path targetRoot = BuildSystem.inferOutputDirectory(sourceRoot);
         if (targetRoot == null || !Files.exists(targetRoot)) {
             return;
         }
@@ -1045,37 +1115,9 @@ public final class HotReloadManager {
             logger.log(Level.FINE, "Synced to target: {0}", relativePath);
 
         } catch (IOException e) {
+            // Use FINE level - sync failure is normal when target doesn't exist yet
             logger.log(Level.FINE, "Failed to sync to target: {0}", e.getMessage());
         }
-    }
-
-    /**
-     * Infers the target directory from a source directory.
-     */
-    private Path inferTargetDirectory(Path sourceRoot) {
-        String path = sourceRoot.toString();
-
-        if (path.contains("/src/main/resources") || path.contains("\\src\\main\\resources")) {
-            String projectPath = path.replaceAll("[/\\\\]src[/\\\\]main[/\\\\]resources.*", "");
-            return Path.of(projectPath, "target", "classes");
-        }
-
-        return null;
-    }
-
-    /**
-     * Debounce check - returns true if enough time has passed since last reload.
-     */
-    private boolean shouldReload(String resourcePath) {
-        long now = System.currentTimeMillis();
-        Long lastTime = lastReloadTime.get(resourcePath);
-
-        if (lastTime != null && (now - lastTime) < DEBOUNCE_MILLIS) {
-            return false;
-        }
-
-        lastReloadTime.put(resourcePath, now);
-        return true;
     }
 
     /**
@@ -1090,6 +1132,5 @@ public final class HotReloadManager {
         componentsByPath.clear();
         dependencyGraph.clear();
         stylesheetToFxml.clear();
-        lastReloadTime.clear();
     }
 }

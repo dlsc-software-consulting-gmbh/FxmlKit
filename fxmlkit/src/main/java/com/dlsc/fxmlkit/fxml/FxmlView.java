@@ -3,12 +3,13 @@ package com.dlsc.fxmlkit.fxml;
 import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.HotReloadable;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.layout.StackPane;
 
 import java.net.URL;
-import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -59,6 +60,25 @@ import java.util.logging.Logger;
  * all nested fx:include files). Searches for .bss and .css in same directory as each FXML,
  * skipping if already declared in FXML.
  *
+ * <h2>Controller Property</h2>
+ * <p>The controller is exposed as a read-only property, enabling reactive updates
+ * when the view is reloaded (e.g., during hot reload):
+ * <pre>{@code
+ * MainView view = new MainView();
+ *
+ * // Subscribe to controller changes (useful for hot reload)
+ * view.controllerProperty().subscribe(controller -> {
+ *     if (controller != null) {
+ *         System.out.println("Controller loaded: " + controller);
+ *     }
+ * });
+ *
+ * // Or use traditional listener
+ * view.controllerProperty().addListener((obs, oldController, newController) -> {
+ *     // React to controller change
+ * });
+ * }</pre>
+ *
  * @param <C> the controller type
  */
 public abstract class FxmlView<C> extends StackPane implements HotReloadable {
@@ -70,11 +90,6 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
      * Maybe null in Tier 1 (zero-config mode).
      */
     private final DiAdapter diAdapter;
-
-    /**
-     * Cached controller instance.
-     */
-    private C controller;
 
     /**
      * Cached root node loaded from FXML.
@@ -150,23 +165,37 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     }
 
     /**
-     * Gets the controller as an Optional.
-     *
-     * @return Optional containing the controller, or empty if FXML has no controller
+     * Controller property - updated on each load/reload.
      */
-    public Optional<C> getController() {
-        return Optional.ofNullable(controller);
+    private final ReadOnlyObjectWrapper<C> controller = new ReadOnlyObjectWrapper<>(this, "controller");
+
+    /**
+     * Returns the controller property.
+     *
+     * <p>This property is updated each time the view is loaded or reloaded.
+     * Use this to react to controller changes during hot reload:
+     * <pre>{@code
+     * view.controllerProperty().subscribe(controller -> {
+     *     // Called on initial load and each reload
+     * });
+     * }</pre>
+     *
+     * @return the read-only controller property
+     */
+    public ReadOnlyObjectProperty<C> controllerProperty() {
+        return controller.getReadOnlyProperty();
     }
 
     /**
-     * Gets the controller, throwing if not present.
+     * Gets the current controller instance.
      *
-     * @return the controller (never null)
-     * @throws IllegalStateException if FXML declares no controller
+     * <p>Returns the controller specified in the FXML's {@code fx:controller} attribute,
+     * or null if no controller is declared.
+     *
+     * @return the controller instance, or null if FXML has no controller
      */
-    public C getRequiredController() {
-        return getController().orElseThrow(() ->
-                new IllegalStateException("No controller found in FXML for " + getClass().getName()));
+    public C getController() {
+        return controller.get();
     }
 
     /**
@@ -199,6 +228,9 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
      * Reloads the view, discarding the cached FXML and controller.
      *
      * <p>Must be called from JavaFX Application Thread.
+     *
+     * <p>After reload, the {@link #controllerProperty()} will be updated with
+     * the new controller instance, triggering any registered listeners.
      */
     @Override
     public void reload() {
@@ -208,13 +240,16 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
     /**
      * Reloads the view with a new resource bundle.
      *
+     * <p>The controller property will be updated directly with the new controller
+     * instance (no intermediate null value), so listeners will receive exactly
+     * one notification per reload.
+     *
      * @param resources the new resource bundle, or null to keep current
      */
     public void reload(ResourceBundle resources) {
         logger.log(Level.FINE, "Reloading FxmlView: {0}", getClass().getSimpleName());
 
         this.getChildren().clear();
-        this.controller = null;
         this.loadedRoot = null;
 
         if (resources != null) {
@@ -246,6 +281,8 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
         URL fxmlUrl = getFxmlUrl();
 
         try {
+            C loadedController;
+
             if (diAdapter != null) {
                 // Tier 2/3: Use FxmlKitLoader for full DI support
                 logger.log(Level.FINE, "Loading with DI ({0}) for {1}",
@@ -258,7 +295,7 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
                 );
 
                 this.loadedRoot = result.getView();
-                this.controller = result.getController();
+                loadedController = result.getController();
 
             } else {
                 // Tier 1: Zero-config mode
@@ -268,13 +305,16 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
                 FXMLLoader loader = FxmlKitLoader.createBasicLoader(fxmlUrl, getClass(), resources);
 
                 this.loadedRoot = loader.load();
-                this.controller = (C) loader.getController();
+                loadedController = (C) loader.getController();
 
                 // Auto-attach stylesheets (including nested FXMLs)
                 if (FxmlKit.isAutoAttachStyles()) {
                     FxmlPathResolver.autoAttachStylesheets(loadedRoot, fxmlUrl);
                 }
             }
+
+            // Update controller property - triggers listeners
+            this.controller.set(loadedController);
 
             // Wrap the loaded root in this StackPane
             this.getChildren().add(loadedRoot);

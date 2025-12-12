@@ -11,6 +11,8 @@ import java.util.logging.Logger;
  *
  * <p>Handles conversion between classpath URIs, file URIs, and resource paths
  * to support CSS hot reload functionality.
+ *
+ * @see BuildSystem
  */
 public final class StylesheetUriConverter {
 
@@ -37,22 +39,25 @@ public final class StylesheetUriConverter {
         }
 
         try {
+            // Strip query parameters (e.g., ?t=1234567890 for cache busting)
+            String cleanUri = stripQueryParams(uri);
+
             // Handle file:// URIs
-            if (uri.startsWith("file:")) {
-                return extractResourcePathFromFileUri(uri);
+            if (cleanUri.startsWith("file:")) {
+                return extractResourcePathFromFileUri(cleanUri);
             }
 
             // Handle jar:// URIs
-            if (uri.startsWith("jar:")) {
-                int bangIndex = uri.indexOf("!/");
+            if (cleanUri.startsWith("jar:")) {
+                int bangIndex = cleanUri.indexOf("!/");
                 if (bangIndex >= 0) {
-                    return uri.substring(bangIndex + 2);
+                    return cleanUri.substring(bangIndex + 2);
                 }
             }
 
             // Handle classpath-relative paths (already resource path format)
-            if (!uri.contains(":") && !uri.startsWith("/")) {
-                return uri;
+            if (!cleanUri.contains(":") && !cleanUri.startsWith("/")) {
+                return cleanUri;
             }
 
             return null;
@@ -60,6 +65,37 @@ public final class StylesheetUriConverter {
             logger.log(Level.FINE, "Failed to convert URI to resource path: {0}", uri);
             return null;
         }
+    }
+
+    /**
+     * Strips query parameters from a URI string.
+     * Used to remove cache-busting timestamps like ?t=1234567890.
+     *
+     * @param uri the URI string
+     * @return the URI without query parameters
+     */
+    private static String stripQueryParams(String uri) {
+        int questionMarkIndex = uri.indexOf('?');
+        return (questionMarkIndex >= 0) ? uri.substring(0, questionMarkIndex) : uri;
+    }
+
+    /**
+     * Strips timestamp query parameter from URI.
+     * Handles URIs like "file:///path/style.css?t=1234567890".
+     *
+     * <p>This is used for cache-busting: JavaFX's StyleManager caches stylesheets
+     * by URI string, so we add timestamps to force reload. This method removes
+     * old timestamps before adding new ones.
+     *
+     * @param uri the URI string (may contain ?t=timestamp)
+     * @return the URI without timestamp parameter
+     */
+    public static String stripTimestamp(String uri) {
+        if (uri == null) {
+            return null;
+        }
+        int timestampIndex = uri.indexOf("?t=");
+        return (timestampIndex >= 0) ? uri.substring(0, timestampIndex) : uri;
     }
 
     /**
@@ -71,39 +107,8 @@ public final class StylesheetUriConverter {
             Path path = Path.of(URI.create(uri));
             String pathStr = path.toString().replace('\\', '/');
 
-            // Find known class output directories
-            String[] markers = {
-                    // Maven
-                    "/target/classes/",
-                    "/target/test-classes/",
-                    // Gradle
-                    "/build/classes/java/main/",
-                    "/build/classes/java/test/",
-                    "/build/classes/kotlin/main/",
-                    "/build/classes/kotlin/test/",
-                    "/build/resources/main/",
-                    "/build/resources/test/",
-                    // IntelliJ IDEA
-                    "/out/production/classes/",
-                    "/out/production/resources/",
-                    "/out/test/classes/",
-                    "/out/test/resources/",
-                    // Source paths (for hot reload)
-                    "/src/main/resources/",
-                    "/src/test/resources/",
-                    "/src/main/java/",
-                    "/src/test/java/",
-                    "/src/main/kotlin/"
-            };
-
-            for (String marker : markers) {
-                int idx = pathStr.indexOf(marker);
-                if (idx >= 0) {
-                    return pathStr.substring(idx + marker.length());
-                }
-            }
-
-            return null;
+            // Use BuildSystem to extract resource path
+            return BuildSystem.extractResourcePath(pathStr);
         } catch (Exception e) {
             logger.log(Level.FINE, "Failed to parse file URI: {0} - {1}",
                     new Object[]{uri, e.getMessage()});
@@ -123,15 +128,8 @@ public final class StylesheetUriConverter {
             return null;
         }
 
-        // Try common source locations (including java dirs for component-specific styles)
-        String[] sourceDirs = {
-                "src/main/resources",
-                "src/test/resources",
-                "src/main/java",
-                "src/test/java"
-        };
-
-        for (String sourceDir : sourceDirs) {
+        // Try all source locations
+        for (String sourceDir : BuildSystem.getSourceDirectories()) {
             Path sourcePath = projectRoot.resolve(sourceDir).resolve(resourcePath);
             if (Files.exists(sourcePath)) {
                 return sourcePath;
@@ -185,49 +183,4 @@ public final class StylesheetUriConverter {
         return resourcePath.equals(uriResourcePath);
     }
 
-    /**
-     * Infers the project root from a target/classes directory.
-     *
-     * @param targetDir a path like /path/to/project/target/classes
-     * @return the project root, or null if cannot infer
-     */
-    public static Path inferProjectRoot(Path targetDir) {
-        if (targetDir == null) {
-            return null;
-        }
-
-        String path = targetDir.toString().replace('\\', '/');
-
-        // Maven: target/classes -> project root
-        if (path.contains("/target/classes")) {
-            int idx = path.indexOf("/target/classes");
-            return Path.of(path.substring(0, idx));
-        }
-
-        // Maven: target/test-classes -> project root
-        if (path.contains("/target/test-classes")) {
-            int idx = path.indexOf("/target/test-classes");
-            return Path.of(path.substring(0, idx));
-        }
-
-        // Gradle: build/classes/java/main -> project root
-        if (path.contains("/build/classes/java/main")) {
-            int idx = path.indexOf("/build/classes/java/main");
-            return Path.of(path.substring(0, idx));
-        }
-
-        // Gradle: build/resources/main -> project root
-        if (path.contains("/build/resources/main")) {
-            int idx = path.indexOf("/build/resources/main");
-            return Path.of(path.substring(0, idx));
-        }
-
-        // IntelliJ: out/production/classes -> project root
-        if (path.contains("/out/production/classes")) {
-            int idx = path.indexOf("/out/production/classes");
-            return Path.of(path.substring(0, idx));
-        }
-
-        return null;
-    }
 }

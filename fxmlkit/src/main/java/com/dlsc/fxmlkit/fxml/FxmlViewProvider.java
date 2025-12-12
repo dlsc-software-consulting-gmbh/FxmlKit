@@ -3,11 +3,12 @@ package com.dlsc.fxmlkit.fxml;
 import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.HotReloadable;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 
 import java.net.URL;
-import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -69,6 +70,30 @@ import java.util.logging.Logger;
  * all nested fx:include files). Searches for .bss and .css in same directory as each FXML,
  * skipping if already declared in FXML.
  *
+ * <h2>View and Controller Properties</h2>
+ * <p>Both view and controller are exposed as read-only properties, enabling reactive updates
+ * when the view is reloaded (e.g., during hot reload):
+ * <pre>{@code
+ * MainViewProvider provider = new MainViewProvider();
+ *
+ * // Subscribe to view changes - auto-update container on hot reload
+ * provider.viewProperty().subscribe(view -> {
+ *     if (view != null) {
+ *         container.getChildren().setAll(view);
+ *     }
+ * });
+ *
+ * // Subscribe to controller changes
+ * provider.controllerProperty().subscribe(controller -> {
+ *     if (controller != null) {
+ *         controller.refreshData();
+ *     }
+ * });
+ *
+ * // Trigger initial load
+ * provider.getView();
+ * }</pre>
+ *
  * @param <T> the controller type
  */
 public abstract class FxmlViewProvider<T> implements HotReloadable {
@@ -82,14 +107,9 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
     private final DiAdapter diAdapter;
 
     /**
-     * Cached root node of the loaded view.
+     * Whether the view has been loaded (for lazy loading control).
      */
-    private Parent view;
-
-    /**
-     * Cached controller instance (may be null if FXML has no controller).
-     */
-    private T controller;
+    private boolean loaded = false;
 
     /**
      * Optional resource bundle for internationalization.
@@ -153,42 +173,92 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
         this.resources = resources;
     }
 
+
+    /**
+     * View property - updated on each load/reload.
+     */
+    private final ReadOnlyObjectWrapper<Parent> view = new ReadOnlyObjectWrapper<>(this, "view");
+
+    /**
+     * Returns the view property.
+     *
+     * <p>This property is updated each time the view is loaded or reloaded.
+     * Use this to react to view changes during hot reload, enabling automatic
+     * UI updates:
+     * <pre>{@code
+     * provider.viewProperty().subscribe(view -> {
+     *     if (view != null) {
+     *         container.getChildren().setAll(view);
+     *     }
+     * });
+     * }</pre>
+     *
+     * <p><b>Note:</b> The property value is null until {@link #getView()} is called
+     * for the first time (lazy loading).
+     *
+     * @return the read-only view property
+     */
+    public ReadOnlyObjectProperty<Parent> viewProperty() {
+        return view.getReadOnlyProperty();
+    }
+
     /**
      * Lazily loads and returns the root node.
      *
      * <p>The FXML is loaded on first access and cached for subsequent calls.
+     * After loading, the {@link #viewProperty()} will be updated, triggering
+     * any registered listeners.
      *
-     * @return the root node (never null)
+     * @return the root node (never null after successful load)
      * @throws RuntimeException if FXML loading fails
      */
     public Parent getView() {
-        if (view == null) {
+        if (!loaded) {
             load();
         }
-        return view;
+        return view.get();
     }
 
     /**
-     * Gets the controller as an Optional.
-     *
-     * @return Optional containing the controller, or empty if FXML has no controller
+     * Controller property - updated on each load/reload.
      */
-    public Optional<T> getController() {
-        if (view == null) {
-            getView();
-        }
-        return Optional.ofNullable(controller);
+    private final ReadOnlyObjectWrapper<T> controller = new ReadOnlyObjectWrapper<>(this, "controller");
+
+    /**
+     * Returns the controller property.
+     *
+     * <p>This property is updated each time the view is loaded or reloaded.
+     * Use this to react to controller changes during hot reload:
+     * <pre>{@code
+     * provider.controllerProperty().subscribe(controller -> {
+     *     if (controller != null) {
+     *         controller.refreshData();
+     *     }
+     * });
+     * }</pre>
+     *
+     * <p><b>Note:</b> The property value is null until {@link #getView()} is called
+     * for the first time (lazy loading).
+     *
+     * @return the read-only controller property
+     */
+    public ReadOnlyObjectProperty<T> controllerProperty() {
+        return controller.getReadOnlyProperty();
     }
 
     /**
-     * Gets the controller, throwing if not present.
+     * Gets the current controller instance.
      *
-     * @return the controller (never null)
-     * @throws IllegalStateException if FXML declares no controller
+     * <p>Returns the controller specified in the FXML's {@code fx:controller} attribute,
+     * or null if no controller is declared or if the view has not been loaded yet.
+     *
+     * <p><b>Note:</b> This method does NOT trigger lazy loading.
+     * Call {@link #getView()} first if you need to ensure the view is loaded.
+     *
+     * @return the controller instance, or null if not loaded or FXML has no controller
      */
-    public T getRequiredController() {
-        return getController().orElseThrow(() ->
-                new IllegalStateException("No controller found in FXML for " + getClass().getName()));
+    public T getController() {
+        return controller.get();
     }
 
     /**
@@ -197,7 +267,7 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
      * @return true if the view has been loaded
      */
     public boolean isLoaded() {
-        return view != null;
+        return loaded;
     }
 
     @Override
@@ -224,11 +294,14 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
      */
     @Override
     public Parent getRootForStyleRefresh() {
-        return view;
+        return view.get();
     }
 
     /**
      * Reloads the view, discarding the cached instance.
+     *
+     * <p>After reload, both {@link #viewProperty()} and {@link #controllerProperty()}
+     * will be updated with new instances, triggering any registered listeners.
      */
     @Override
     public void reload() {
@@ -238,13 +311,16 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
     /**
      * Reloads the view with a new resource bundle.
      *
+     * <p>The view and controller properties will be updated directly with new instances
+     * (no intermediate null values), so listeners will receive exactly one notification
+     * per reload for each property.
+     *
      * @param resources the new resource bundle, or null to keep current
      */
     public void reload(ResourceBundle resources) {
         logger.log(Level.FINE, "Reloading FxmlViewProvider: {0}", getClass().getSimpleName());
 
-        this.view = null;
-        this.controller = null;
+        this.loaded = false;
 
         if (resources != null) {
             this.resources = resources;
@@ -265,39 +341,77 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
     /**
      * Loads FXML and wires DI based on the configured adapter.
      */
-    @SuppressWarnings("unchecked")
     private void load() {
+        // Prevent re-entry (e.g., if beforeLoad() triggers another getView())
+        if (loaded) {
+            return;
+        }
+        loaded = true;
+
         logger.log(Level.FINE, "Loading view for: {0}", getClass().getName());
 
-        // Hook for subclasses
-        beforeLoad();
+        try {
+            // Hook for subclasses
+            beforeLoad();
 
-        if (diAdapter == null) {
-            // Tier 1: Zero-configuration mode
-            logger.log(Level.FINE, "Tier 1: Loading without DI (zero-config mode) for {0}",
-                    getClass().getSimpleName());
-            loadWithoutDI();
-        } else {
-            // Tier 2/3: DI-enabled mode
-            logger.log(Level.FINE, "Tier 2/3: Loading with DI ({0}) for {1}",
-                    new Object[]{diAdapter.getClass().getSimpleName(), getClass().getSimpleName()});
-            loadWithDI();
+            Parent loadedView;
+            T loadedController;
+
+            if (diAdapter == null) {
+                // Tier 1: Zero-configuration mode
+                logger.log(Level.FINE, "Tier 1: Loading without DI (zero-config mode) for {0}",
+                        getClass().getSimpleName());
+                LoadResult<T> result = loadWithoutDI();
+                loadedView = result.view;
+                loadedController = result.controller;
+            } else {
+                // Tier 2/3: DI-enabled mode
+                logger.log(Level.FINE, "Tier 2/3: Loading with DI ({0}) for {1}",
+                        new Object[]{diAdapter.getClass().getSimpleName(), getClass().getSimpleName()});
+                FxmlKitLoader.LoadResult<T> result = loadWithDI();
+                loadedView = result.getView();
+                loadedController = result.getController();
+            }
+
+            // Update properties - triggers listeners
+            this.view.set(loadedView);
+            this.controller.set(loadedController);
+
+            logger.log(Level.FINE, "View loaded successfully for: {0}", getClass().getName());
+
+            // Register for hot reload after successful load
+            registerForHotReload();
+
+            // Hook for subclasses
+            afterLoad();
+
+        } catch (Exception e) {
+            // Reset loaded flag to allow retry after fixing the error
+            loaded = false;
+            throw e;
         }
+    }
 
-        logger.log(Level.FINE, "View loaded successfully for: {0}", getClass().getName());
+    /**
+     * Internal result holder for Tier 1 loading.
+     */
+    private static class LoadResult<T> {
+        final Parent view;
+        final T controller;
 
-        // Register for hot reload after successful load
-        registerForHotReload();
-
-        // Hook for subclasses
-        afterLoad();
+        LoadResult(Parent view, T controller) {
+            this.view = view;
+            this.controller = controller;
+        }
     }
 
     /**
      * Tier 1: Load FXML without dependency injection.
+     *
+     * @return the load result containing view and controller
      */
     @SuppressWarnings("unchecked")
-    private void loadWithoutDI() {
+    private LoadResult<T> loadWithoutDI() {
         try {
             URL url = getFxmlUrl();
 
@@ -310,8 +424,7 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
                 FxmlPathResolver.autoAttachStylesheets(root, url);
             }
 
-            this.view = root;
-            this.controller = (T) loader.getController();
+            return new LoadResult<>(root, (T) loader.getController());
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to load FXML for " + getClass().getName(), e);
@@ -320,16 +433,15 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
 
     /**
      * Tier 2/3: Load FXML with full dependency injection support.
+     *
+     * @return the load result containing view and controller
      */
-    private void loadWithDI() {
-        FxmlKitLoader.LoadResult<T> result = FxmlKitLoader.loadWithController(
+    private FxmlKitLoader.LoadResult<T> loadWithDI() {
+        return FxmlKitLoader.loadWithController(
                 diAdapter,
                 getClass(),
                 resources
         );
-
-        this.view = result.getView();
-        this.controller = result.getController();
     }
 
     /**
@@ -373,7 +485,7 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
         try {
             FxmlViewProvider<T> provider = viewProviderClass.getDeclaredConstructor().newInstance();
             Parent view = provider.getView();
-            T controller = provider.getController().orElse(null);
+            T controller = provider.getController();
             return new ViewResult<>(view, controller);
         } catch (Exception e) {
             throw new RuntimeException("Failed to create view provider: " + viewProviderClass.getName(), e);

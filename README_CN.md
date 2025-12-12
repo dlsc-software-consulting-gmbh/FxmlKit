@@ -153,6 +153,24 @@ public class StatusCard extends VBox {
 
 ## 快速开始
 
+### 依赖要求
+
+- **Java:** 11 或更高版本（推荐 17.0.4+）
+- **JavaFX:** 11 或更高版本（推荐 17+）
+
+#### 热更新性能说明
+
+FxmlKit 使用 Java 内置的 `WatchService` 实现 FXML/CSS 热更新。该服务在不同操作系统上的性能表现存在差异：
+
+| 操作系统 | Java 版本 | 文件变更检测延迟 |
+|---------|----------|----------------|
+| Windows | 11+ | 几乎瞬间 |
+| Linux | 11+ | 几乎瞬间 |
+| macOS | 11 ~ 17.0.3 | 约 10 秒 |
+| macOS | 17.0.4+ | 约 2 秒 |
+
+> **提示：** 为了兼容性，项目 pom.xml 中设置的 Java 版本为 11。macOS 用户如需运行 fxmlkit-samples 示例，建议将 JDK 升级至 17.0.4 或更高版本以获得更好的热更新体验。
+
 ### 安装
 
 **Maven:**
@@ -344,6 +362,53 @@ LoginView view = new LoginView(new GuiceDiAdapter(userInjector));
 
 ---
 
+### 响应式 Controller API
+
+FxmlKit 将控制器和视图暴露为 JavaFX 属性，支持响应式编程模式。这在热更新时特别有用，可以自动更新 UI 以响应控制器变化。
+
+**使用 FxmlView（立即加载）：**
+```java
+MainView view = new MainView();
+
+// 直接访问控制器（仅当 FXML 中没有 fx:controller 时才返回 null）
+MainController controller = view.getController();
+
+// 响应控制器变化（例如热更新时）
+view.controllerProperty().addListener((obs, oldController, newController) -> {
+    if (newController != null) {
+        newController.refreshData();  // 热更新时重新初始化
+    }
+});
+```
+
+**使用 FxmlViewProvider（懒加载）：**
+```java
+MainViewProvider provider = new MainViewProvider();
+
+// 在调用 getView() 之前，controller 为 null
+MainController controller = provider.getController();  // null - 尚未加载
+
+// 响应控制器变化
+provider.controllerProperty().addListener((obs, oldCtrl, newCtrl) -> {
+    if (newCtrl != null) {
+        newCtrl.loadData();
+    }
+});
+
+// 触发懒加载
+Parent view = provider.getView();  // 现在 FXML 已加载
+controller = provider.getController();  // 现在返回控制器
+```
+
+**优势：**
+- ✅ 自动响应热更新事件
+- ✅ 与 JavaFX 属性绑定无缝集成
+- ✅ 相比手动处理重载更简洁
+
+**注意：** 使用 `FxmlView` 时，FXML 在构造函数中立即加载，因此 `getController()` 总是返回控制器（或在 FXML 没有 `fx:controller` 属性时返回 null）。使用 `FxmlViewProvider` 时，FXML 在首次调用 `getView()` 时才懒加载，因此在此之前 `getController()` 返回 null。
+
+---
+
 ## 热更新
 
 FxmlKit 内置热更新功能，加速 UI 开发。编辑 FXML 或 CSS 文件后，无需重启即可看到效果。
@@ -398,9 +463,10 @@ FxmlKit.applicationUserAgentStylesheetProperty()
 
 注意：直接使用 `Application.setUserAgentStylesheet()` 仍然可以工作，但不会触发热更新。
 
+
 ### 自定义控件 User Agent Stylesheet
 
-FxmlKit 自动支持重写了 `getUserAgentStylesheet()` 的自定义控件的热更新：
+FxmlKit 支持重写了 `getUserAgentStylesheet()` 的自定义控件的热更新，但**此功能需要显式启用**，因为涉及 CSS 优先级变更：
 ```java
 public class VersionLabel extends Label {
     
@@ -411,16 +477,29 @@ public class VersionLabel extends Label {
 }
 ```
 
-**实现原理：** 在开发模式下，FxmlKit 自动检测重写了 `getUserAgentStylesheet()` 的自定义控件，并将样式表提升到 `getStylesheets().add(0, ...)`。这样既能启用热更新监控，又能保持预期的低优先级行为（索引 0 = 作者样式表中最低优先级）。
+**启用自定义控件 UA 热更新：**
+```java
+// 方式一：启用开发模式（FXML + CSS 热更新）
+FxmlKit.enableDevelopmentMode();
+FxmlKit.setControlUAHotReloadEnabled(true);
 
-**优先级说明：** 这种提升会轻微改变 CSS 优先级语义 —— 样式表从"用户代理样式表"变成了"作者样式表"。实际使用中这很少造成问题，因为：
-- 样式表添加在索引 0（最低优先级）
-- 仅在开发模式下生效
-- 生产环境使用原生 UA 样式表机制
+// 方式二：仅启用 CSS 热更新
+FxmlKit.setCssHotReloadEnabled(true);
+FxmlKit.setControlUAHotReloadEnabled(true);
+```
 
-如果在开发过程中遇到样式冲突，有两种解决方案：
-- 提高自定义控件 CSS 中选择器的优先级
-- 临时移除 `getUserAgentStylesheet()` 重写，改为将样式表添加到 `getStylesheets()` 中。开发完成后再还原，恢复正确的 UA 样式表行为。
+**⚠️ 前置条件：**
+- 控件 UA 热更新需要 CSS 监控处于活动状态
+- 请先通过 `enableDevelopmentMode()` 或 `setCssHotReloadEnabled(true)` 启用 CSS 热更新
+
+**实现原理：** 启用后，FxmlKit 自动检测重写了 `getUserAgentStylesheet()` 的自定义控件，并将样式表提升到 `getStylesheets().add(0, ...)` 以进行监控。样式表添加在索引 0（作者样式表中最低优先级）以近似原有的低优先级行为。
+
+**⚠️ 为什么需要显式启用？** 这种提升会改变 CSS 级联语义 —— 样式表从"用户代理样式表"变成了"作者样式表"。在某些情况下，这可能导致自定义控件样式意外覆盖用户定义的或场景级别的样式表。
+
+**建议：**
+- 仅在需要编辑自定义控件样式表时才在开发环境启用
+- 生产环境禁用：`FxmlKit.setControlUAHotReloadEnabled(false)`
+- 如遇到意外的样式冲突，请测试您的样式
 
 ### 精细控制
 
@@ -430,6 +509,9 @@ FxmlKit.setFxmlHotReloadEnabled(true);
 
 // 仅启用 CSS 热更新
 FxmlKit.setCssHotReloadEnabled(true);
+
+// 启用控件 UA 样式表热更新（需要显式启用，依赖 CSS 热更新）
+FxmlKit.setControlUAHotReloadEnabled(true);
 
 // 同时启用（等同于 enableDevelopmentMode()）
 FxmlKit.setFxmlHotReloadEnabled(true);

@@ -19,24 +19,34 @@ import javafx.stage.Stage;
  * <p><b>Hot-reload behavior:</b></p>
  * <ul>
  *   <li><b>Application level:</b> Use {@link FxmlKit#setApplicationUserAgentStylesheet(String)}
- *       instead of the native API. This is because {@code Application.userAgentStylesheet} is a
- *       plain String (no Property), so FxmlKit provides a bridged StringProperty for monitoring.</li>
+ *       instead of the native API. This enables hot-reload monitoring via a bridged StringProperty,
+ *       since {@code Application.userAgentStylesheet} is a static getter/setter without Property support.</li>
  *   <li><b>Scene/SubScene levels:</b> Automatically monitored via their built-in
  *       {@code userAgentStylesheetProperty()}. Just use the native JavaFX API.</li>
- *   <li><b>Custom controls:</b> Automatically detected and monitored. FxmlKit promotes the
- *       stylesheet to {@code getStylesheets().add(0, ...)} at development time to enable
- *       hot-reload. See {@link VersionLabel} for an example.</li>
+ *   <li><b>Custom controls:</b> Requires explicit enablement via
+ *       {@link FxmlKit#setControlUAHotReloadEnabled(boolean)} due to CSS priority implications.
+ *       When enabled, FxmlKit promotes the UA stylesheet to {@code getStylesheets().add(0, ...)}
+ *       to enable monitoring. See {@link VersionLabel} for an example custom control.</li>
  * </ul>
+ *
+ * <p><b>Note:</b> Custom control UA hot-reload is disabled by default because it changes
+ * CSS cascade priority. Only enable during development when needed.
  *
  * @see ThemeTestController
  * @see VersionLabel
  * @see FxmlKit#setApplicationUserAgentStylesheet(String)
+ * @see FxmlKit#setControlUAHotReloadEnabled(boolean)
  */
 public class ThemeTestApp extends Application {
 
     @Override
-    public void start(Stage primaryStage) throws Exception {
+    public void start(Stage primaryStage) {
+        // Enable FXML/CSS hot reload for development
         FxmlKit.enableDevelopmentMode();
+
+        // Enable hot-reload for custom control UA stylesheets (e.g., VersionLabel)
+        // Note: This is opt-in due to CSS priority changes - see FxmlKit docs for details
+        FxmlKit.setControlUAHotReloadEnabled(true);
 
         Scene scene = new Scene(new ThemeTestView());
 
