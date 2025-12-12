@@ -128,6 +128,49 @@ public final class HotReloadManager {
     private static final long DEBOUNCE_MILLIS = 200;
 
     /**
+     * High sensitivity modifier for faster file change detection on macOS.
+     *
+     * <p>On macOS with Java 11~17.0.3, the default WatchService uses polling
+     * with a 10-second interval. This modifier reduces it to ~2 seconds.
+     *
+     * <p>This is a private API (com.sun.nio.file.SensitivityWatchEventModifier.HIGH)
+     * that may not be available in all JVM implementations. The code gracefully
+     * falls back to default behavior if unavailable.
+     *
+     * <p>Note: Java 17.0.4+ already uses 2-second polling by default (JDK-8285956).
+     */
+    private static final WatchEvent.Modifier[] HIGH_SENSITIVITY_MODIFIERS;
+
+    static {
+        HIGH_SENSITIVITY_MODIFIERS = initHighSensitivityModifier();
+    }
+
+    /**
+     * Initializes the HIGH sensitivity modifier via reflection.
+     *
+     * <p>Uses reflection to avoid compile-time dependency on private API.
+     * Safe for GraalVM Native Image: gracefully degrades if reflection fails.
+     *
+     * @return array containing HIGH modifier, or empty array if unavailable
+     */
+    private static WatchEvent.Modifier[] initHighSensitivityModifier() {
+        try {
+            Class<?> modifierClass = Class.forName("com.sun.nio.file.SensitivityWatchEventModifier");
+            for (Object constant : modifierClass.getEnumConstants()) {
+                if ("HIGH".equals(((Enum<?>) constant).name())) {
+                    logger.log(Level.FINE, "Using HIGH sensitivity WatchService modifier for faster file detection");
+                    return new WatchEvent.Modifier[]{ (WatchEvent.Modifier) constant };
+                }
+            }
+        } catch (ClassNotFoundException e) {
+            logger.log(Level.FINE, "SensitivityWatchEventModifier not available, using default polling interval");
+        } catch (Exception e) {
+            logger.log(Level.FINE, "Failed to initialize HIGH sensitivity modifier: {0}", e.getMessage());
+        }
+        return new WatchEvent.Modifier[0];
+    }
+
+    /**
      * Whether FXML hot reload is enabled.
      */
     private volatile boolean fxmlHotReloadEnabled = false;
@@ -539,6 +582,9 @@ public final class HotReloadManager {
 
     /**
      * Recursively registers a directory and all subdirectories for watching.
+     *
+     * <p>Uses HIGH sensitivity modifier on macOS for faster file change detection
+     * (reduces polling interval from 10s to ~2s on Java 11~17.0.3).
      */
     private void registerDirectoryRecursive(Path dir) throws IOException {
         Files.walkFileTree(dir, new SimpleFileVisitor<>() {
@@ -546,9 +592,12 @@ public final class HotReloadManager {
             public FileVisitResult preVisitDirectory(Path subDir, BasicFileAttributes attrs) {
                 try {
                     WatchKey key = subDir.register(watchService,
-                            StandardWatchEventKinds.ENTRY_CREATE,
-                            StandardWatchEventKinds.ENTRY_MODIFY,
-                            StandardWatchEventKinds.ENTRY_DELETE);
+                            new WatchEvent.Kind<?>[]{
+                                    StandardWatchEventKinds.ENTRY_CREATE,
+                                    StandardWatchEventKinds.ENTRY_MODIFY,
+                                    StandardWatchEventKinds.ENTRY_DELETE
+                            },
+                            HIGH_SENSITIVITY_MODIFIERS);
                     watchKeyToPath.put(key, subDir);
                 } catch (IOException e) {
                     logger.log(Level.FINE, "Cannot watch directory: {0}", subDir);
