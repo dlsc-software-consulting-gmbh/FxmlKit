@@ -245,7 +245,12 @@ public final class HotReloadManager {
     private final Map<String, Set<String>> stylesheetToFxml = new ConcurrentHashMap<>();
 
     /**
-     * Cached project root for global CSS monitoring.
+     * Cached project root, used as initial/fallback value.
+     *
+     * <p><b>Note:</b> This is a single value set either manually via
+     * {@link #setProjectRoot(Path)} or auto-detected at startup. For
+     * multi-module support, {@link #monitoredRoots} tracks all directories
+     * being monitored, which are discovered dynamically from stylesheet URIs.
      */
     private volatile Path cachedProjectRoot;
 
@@ -1235,16 +1240,6 @@ public final class HotReloadManager {
             return;
         }
 
-        // Find source file URI for bypassing cache
-        String sourceFileUri = null;
-        if (cachedProjectRoot != null) {
-            Path sourceFile = StylesheetUriConverter.findSourceFile(cssResourcePath, cachedProjectRoot);
-            if (sourceFile != null) {
-                sourceFileUri = sourceFile.toUri().toString();
-            }
-        }
-        final String finalSourceUri = sourceFileUri;
-
         logger.log(Level.INFO, "Stylesheet refresh: {0} component(s)", componentsToReload.size());
 
         Platform.runLater(() -> {
@@ -1252,7 +1247,7 @@ public final class HotReloadManager {
                 try {
                     Parent root = component.getRootForStyleRefresh();
                     if (root != null) {
-                        refreshStylesheets(root, cssResourcePath, finalSourceUri);
+                        refreshStylesheets(root, cssResourcePath);
                         logger.log(Level.FINE, "Stylesheet refreshed: {0}",
                                 component.getClass().getSimpleName());
                     } else {
@@ -1276,7 +1271,7 @@ public final class HotReloadManager {
      * <p>Uses remove-add strategy to force JavaFX to reload the stylesheet.
      * This approach is compatible with other CSS monitoring tools like CSSFX.
      */
-    private void refreshStylesheets(Parent root, String cssResourcePath, String sourceFileUri) {
+    private void refreshStylesheets(Parent root, String cssResourcePath) {
         refreshStylesheetsRecursive(root, cssResourcePath);
     }
 

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -90,7 +91,14 @@ public final class GlobalCssMonitor {
     private final Map<Class<?>, Boolean> userAgentStylesheetOverrideCache = new HashMap<>();
 
     /**
-     * Volatile: read by WatchService thread in refreshStylesheet().
+     * The most recently discovered or set project root.
+     *
+     * <p><b>Note:</b> This is a single value and will be overwritten when new
+     * project roots are discovered. For multi-module support, use
+     * {@link #reportedProjectRoots} which tracks all discovered roots.
+     *
+     * <p>This field is kept for backward compatibility with external callers
+     * using {@link #getProjectRoot()} and {@link #setProjectRoot(Path)}.
      */
     private volatile Path projectRoot;
 
@@ -141,10 +149,17 @@ public final class GlobalCssMonitor {
      * Callback to notify HotReloadManager when a new project root is discovered.
      * This is set by HotReloadManager after construction.
      */
-    private java.util.function.Consumer<Path> onProjectRootDiscovered;
+    private Consumer<Path> onProjectRootDiscovered;
 
     /**
-     * Set of project roots that have already been reported via callback.
+     * Set of all discovered project roots from stylesheet URIs.
+     *
+     * <p>This supports multi-module projects by tracking each module's
+     * project root separately. When a stylesheet URI is registered,
+     * its project root is extracted and added to this set.
+     *
+     * <p>Each new discovery triggers the {@link #onProjectRootDiscovered}
+     * callback to notify HotReloadManager to start monitoring.
      */
     private final Set<Path> reportedProjectRoots = new HashSet<>();
 
@@ -157,7 +172,7 @@ public final class GlobalCssMonitor {
      *
      * @param callback the callback to invoke with the discovered project root
      */
-    public void setOnProjectRootDiscovered(java.util.function.Consumer<Path> callback) {
+    public void setOnProjectRootDiscovered(Consumer<Path> callback) {
         this.onProjectRootDiscovered = callback;
     }
 
@@ -811,24 +826,13 @@ public final class GlobalCssMonitor {
             return;
         }
 
-        // Find source file URI (for bypassing cache)
-        String sourceFileUri = null;
-        Path root = projectRoot;  // volatile read
-        if (root != null) {
-            Path sourceFile = StylesheetUriConverter.findSourceFile(resourcePath, root);
-            if (sourceFile != null) {
-                sourceFileUri = sourceFile.toUri().toString();
-            }
-        }
-        final String finalSourceUri = sourceFileUri;
-
         Platform.runLater(() -> {
             int refreshCount = 0;
 
-            refreshCount += refreshNormalStylesheets(resourcePath, finalSourceUri);
-            refreshCount += refreshSceneUserAgentStylesheets(resourcePath, finalSourceUri);
-            refreshCount += refreshSubSceneUserAgentStylesheets(resourcePath, finalSourceUri);
-            refreshCount += refreshApplicationUserAgentStylesheet(resourcePath, finalSourceUri);
+            refreshCount += refreshNormalStylesheets(resourcePath);
+            refreshCount += refreshSceneUserAgentStylesheets(resourcePath);
+            refreshCount += refreshSubSceneUserAgentStylesheets(resourcePath);
+            refreshCount += refreshApplicationUserAgentStylesheet(resourcePath);
 
             if (refreshCount > 0) {
                 logger.log(Level.INFO, "Refreshed {0} stylesheet reference(s) for: {1}",
@@ -844,7 +848,7 @@ public final class GlobalCssMonitor {
      * <p>Uses remove-add strategy to force JavaFX to reload the stylesheet.
      * This approach is compatible with other CSS monitoring tools like CSSFX.
      */
-    private int refreshNormalStylesheets(String resourcePath, String sourceFileUri) {
+    private int refreshNormalStylesheets(String resourcePath) {
         List<WeakReference<ObservableList<String>>> owners = stylesheetOwners.get(resourcePath);
         if (owners == null || owners.isEmpty()) {
             return 0;
@@ -879,7 +883,7 @@ public final class GlobalCssMonitor {
      *
      * <p>Uses null-set strategy to force JavaFX to reload the stylesheet.
      */
-    private int refreshSceneUserAgentStylesheets(String resourcePath, String sourceFileUri) {
+    private int refreshSceneUserAgentStylesheets(String resourcePath) {
         List<WeakReference<Scene>> owners = sceneUAOwners.get(resourcePath);
         if (owners == null || owners.isEmpty()) {
             return 0;
@@ -911,7 +915,7 @@ public final class GlobalCssMonitor {
      *
      * <p>Uses null-set strategy to force JavaFX to reload the stylesheet.
      */
-    private int refreshSubSceneUserAgentStylesheets(String resourcePath, String sourceFileUri) {
+    private int refreshSubSceneUserAgentStylesheets(String resourcePath) {
         List<WeakReference<SubScene>> owners = subSceneUAOwners.get(resourcePath);
         if (owners == null || owners.isEmpty()) {
             return 0;
@@ -942,7 +946,7 @@ public final class GlobalCssMonitor {
      *
      * <p>Uses null-set strategy to force JavaFX to reload the stylesheet.
      */
-    private int refreshApplicationUserAgentStylesheet(String resourcePath, String sourceFileUri) {
+    private int refreshApplicationUserAgentStylesheet(String resourcePath) {
         if (!resourcePath.equals(applicationUAResourcePath)) {
             return 0;
         }
