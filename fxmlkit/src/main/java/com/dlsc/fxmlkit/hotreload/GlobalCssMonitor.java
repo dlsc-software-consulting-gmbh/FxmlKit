@@ -780,8 +780,8 @@ public final class GlobalCssMonitor {
             while (path.startsWith("/") && path.length() > 2 && path.charAt(2) == ':') {
                 path = path.substring(1);
             }
-            // Delegate to HotReloadManager for consistent path extraction
-            String resourcePath = HotReloadManager.getInstance().extractResourcePath(path);
+            // Delegate to SourcePathConverters for consistent path extraction
+            String resourcePath = SourcePathConverters.extractResourcePath(path);
             return resourcePath != null ? resourcePath : path;
         }
 

@@ -50,6 +50,44 @@ public final class SourcePathConverters {
         // Utility class
     }
 
+    // ==================== Path Markers ====================
+
+    /**
+     * Build output directory markers.
+     * Used to extract resource paths from compiled class locations.
+     */
+    private static final String[] OUTPUT_MARKERS = {
+            // Maven
+            "target/classes/",
+            "target/test-classes/",
+            // Gradle Java
+            "build/classes/java/main/",
+            "build/classes/java/test/",
+            "build/resources/main/",
+            "build/resources/test/",
+            // Gradle Kotlin
+            "build/classes/kotlin/main/",
+            "build/classes/kotlin/test/",
+            // IntelliJ IDEA
+            "out/production/classes/",
+            "out/production/resources/",
+            "out/test/classes/",
+            "out/test/resources/",
+    };
+
+    /**
+     * Source directory markers.
+     * Used to extract resource paths from source file locations.
+     */
+    private static final String[] SOURCE_MARKERS = {
+            "src/main/resources/",
+            "src/main/java/",
+            "src/main/kotlin/",
+            "src/test/resources/",
+            "src/test/java/",
+            "src/test/kotlin/",
+    };
+
     // ==================== Built-in Converters ====================
 
     /**
@@ -136,6 +174,46 @@ public final class SourcePathConverters {
     );
 
     // ==================== Utility Methods ====================
+
+    /**
+     * Extracts the resource path from a file system path.
+     *
+     * <p>This method looks for common build output and source directory markers
+     * and extracts the resource-relative path. For example:
+     * <ul>
+     *   <li>{@code /project/target/classes/com/example/View.fxml} → {@code com/example/View.fxml}</li>
+     *   <li>{@code /project/src/main/resources/com/example/style.css} → {@code com/example/style.css}</li>
+     * </ul>
+     *
+     * <p>This method is used by both HotReloadManager and GlobalCssMonitor
+     * to normalize paths for comparison and tracking.
+     *
+     * @param filePath the file system path (not a URI)
+     * @return the resource path, or null if no marker found
+     */
+    public static String extractResourcePath(String filePath) {
+        if (filePath == null) {
+            return null;
+        }
+
+        // Check output directory markers first
+        for (String marker : OUTPUT_MARKERS) {
+            int index = filePath.indexOf(marker);
+            if (index >= 0) {
+                return filePath.substring(index + marker.length());
+            }
+        }
+
+        // Then check source directory markers
+        for (String marker : SOURCE_MARKERS) {
+            int index = filePath.indexOf(marker);
+            if (index >= 0) {
+                return filePath.substring(index + marker.length());
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Creates a converter that chains multiple converters.

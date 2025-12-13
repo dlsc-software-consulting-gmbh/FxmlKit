@@ -576,53 +576,7 @@ public final class HotReloadManager {
         }
 
         // Extract resource path from file path
-        return extractResourcePath(path);
-    }
-
-    /**
-     * Extracts the resource path from a file system path.
-     *
-     * <p>Looks for common markers like "target/classes", "build/classes", etc.
-     * This method is also used by GlobalCssMonitor.
-     *
-     * @param filePath the file system path
-     * @return the resource path, or null if no marker found
-     */
-    String extractResourcePath(String filePath) {
-        String[] markers = {
-                // Maven
-                "target/classes/",
-                "target/test-classes/",
-                // Gradle Java
-                "build/classes/java/main/",
-                "build/classes/java/test/",
-                "build/resources/main/",
-                "build/resources/test/",
-                // Gradle Kotlin
-                "build/classes/kotlin/main/",
-                "build/classes/kotlin/test/",
-                // IntelliJ IDEA
-                "out/production/classes/",
-                "out/production/resources/",
-                "out/test/classes/",
-                "out/test/resources/",
-                // Source directories
-                "src/main/resources/",
-                "src/main/java/",
-                "src/main/kotlin/",
-                "src/test/resources/",
-                "src/test/java/",
-                "src/test/kotlin/"
-        };
-
-        for (String marker : markers) {
-            int index = filePath.indexOf(marker);
-            if (index >= 0) {
-                return filePath.substring(index + marker.length());
-            }
-        }
-
-        return null;
+        return SourcePathConverters.extractResourcePath(path);
     }
 
     /**
