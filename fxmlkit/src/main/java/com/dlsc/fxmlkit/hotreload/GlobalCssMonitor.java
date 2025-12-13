@@ -481,16 +481,22 @@ public final class GlobalCssMonitor {
         String stylesheet = region.getUserAgentStylesheet();
 
         if (stylesheet != null && !stylesheet.isEmpty()) {
+            // In development mode, use source URI to load the latest file
+            // (avoids ClassLoader cache returning stale content)
+            String stylesheetToAdd = HotReloadManager.getInstance().isCssHotReloadEnabled()
+                    ? resolveToSourceUri(stylesheet)
+                    : stylesheet;
+
             // Add to stylesheet list at index 0 for proper priority
             ObservableList<String> stylesheets = region.getStylesheets();
-            if (!stylesheets.contains(stylesheet)) {
-                stylesheets.add(0, stylesheet);
+            if (!stylesheets.contains(stylesheetToAdd)) {
+                stylesheets.add(0, stylesheetToAdd);
                 promotedUserAgentStylesheets.put(region, stylesheet);
-                logger.log(Level.FINE, "Promoted control UA stylesheet: {0}", stylesheet);
+                logger.log(Level.FINE, "Promoted control UA stylesheet: {0}", stylesheetToAdd);
 
                 // Register and monitor the stylesheet
-                registerStylesheetUri(stylesheet, stylesheets);
-                HotReloadManager.getInstance().monitorStylesheet(stylesheet,
+                registerStylesheetUri(stylesheetToAdd, stylesheets);
+                HotReloadManager.getInstance().monitorStylesheet(stylesheetToAdd,
                         () -> refreshControlUA(region, stylesheets));
             }
         }
