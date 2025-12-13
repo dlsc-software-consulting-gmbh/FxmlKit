@@ -17,12 +17,11 @@ import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -51,13 +50,6 @@ public final class GlobalCssMonitor {
     private static final Logger logger = Logger.getLogger(GlobalCssMonitor.class.getName());
 
     /**
-     * Bridge property for Application-level User Agent Stylesheet.
-     * Syncs to {@link Application#setUserAgentStylesheet(String)} on changes.
-     */
-    private final StringProperty applicationUserAgentStylesheet =
-            new SimpleStringProperty(this, "applicationUserAgentStylesheet");
-
-    /**
      * Resource path of the current Application UA stylesheet.
      */
     private String applicationUAResourcePath;
@@ -65,12 +57,12 @@ public final class GlobalCssMonitor {
     /**
      * Maps resource paths to Scenes using them as UA stylesheet.
      */
-    private final Map<String, List<WeakReference<Scene>>> sceneUAOwners = new HashMap<>();
+    private final Map<String, List<WeakReference<Scene>>> sceneUAOwners = new ConcurrentHashMap<>();
 
     /**
      * Maps resource paths to SubScenes using them as UA stylesheet.
      */
-    private final Map<String, List<WeakReference<SubScene>>> subSceneUAOwners = new HashMap<>();
+    private final Map<String, List<WeakReference<SubScene>>> subSceneUAOwners = new ConcurrentHashMap<>();
 
     /**
      * Tracks Regions that have had their getUserAgentStylesheet() promoted.
@@ -90,12 +82,12 @@ public final class GlobalCssMonitor {
     /**
      * Tracks stylesheet lists that already have listeners.
      */
-    private final Set<ObservableList<String>> listenedStylesheets = new HashSet<>();
+    private final Set<ObservableList<String>> listenedStylesheets = ConcurrentHashMap.newKeySet();
 
     /**
      * Maps resource paths to their stylesheet list owners.
      */
-    private final Map<String, List<WeakReference<ObservableList<String>>>> stylesheetOwners = new HashMap<>();
+    private final Map<String, List<WeakReference<ObservableList<String>>>> stylesheetOwners = new ConcurrentHashMap<>();
 
     /**
      * Whether monitoring is active.
@@ -131,9 +123,15 @@ public final class GlobalCssMonitor {
                 }
             }
             Application.setUserAgentStylesheet(uriToSet);
-            updateApplicationUAMonitoring(oldVal, newVal);
+            updateApplicationUAMonitoring(newVal);
         });
     }
+
+    /**
+     * Bridge property for Application-level User Agent Stylesheet.
+     * Syncs to {@link Application#setUserAgentStylesheet(String)} on changes.
+     */
+    private final StringProperty applicationUserAgentStylesheet = new SimpleStringProperty(this, "applicationUserAgentStylesheet");
 
     /**
      * Returns the Application UA Stylesheet property.
@@ -277,27 +275,6 @@ public final class GlobalCssMonitor {
     }
 
     /**
-     * Refreshes a stylesheet by removing and re-adding it.
-     *
-     * @param resourcePath the resource path of the stylesheet
-     */
-    public void refreshStylesheet(String resourcePath) {
-        if (!monitoring) {
-            return;
-        }
-
-        Platform.runLater(() -> {
-            // Refresh normal stylesheets
-            refreshNormalStylesheets(resourcePath);
-
-            // Refresh UA stylesheets
-            refreshApplicationUA(resourcePath);
-            refreshSceneUA(resourcePath);
-            refreshSubSceneUA(resourcePath);
-        });
-    }
-
-    /**
      * Monitors a scene for stylesheet changes.
      */
     public void monitorScene(Scene scene) {
@@ -387,7 +364,7 @@ public final class GlobalCssMonitor {
     /**
      * Updates Application UA monitoring when the stylesheet changes.
      */
-    private void updateApplicationUAMonitoring(String oldUri, String newUri) {
+    private void updateApplicationUAMonitoring(String newUri) {
         HotReloadManager manager = HotReloadManager.getInstance();
 
         if (newUri != null && !newUri.isEmpty()) {
@@ -402,41 +379,26 @@ public final class GlobalCssMonitor {
      * Monitors Scene UA stylesheet.
      */
     private void monitorSceneUA(Scene scene) {
-        scene.userAgentStylesheetProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !newVal.isEmpty()) {
-                String resourcePath = extractResourcePath(newVal);
-                sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
-                        .add(new WeakReference<>(scene));
-
-                HotReloadManager.getInstance().monitorStylesheet(newVal, () -> refreshSceneUA(resourcePath));
-
-                // In development mode, immediately convert to source URI
-                // (avoids ClassLoader cache returning stale content)
-                if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
-                    String sourceUri = resolveToSourceUri(newVal);
-                    if (!sourceUri.equals(newVal)) {
-                        Platform.runLater(() -> {
-                            scene.setUserAgentStylesheet(null);
-                            scene.setUserAgentStylesheet(sourceUri);
-                        });
-                    }
-                }
-            }
-        });
+        scene.userAgentStylesheetProperty().addListener((obs, oldVal, newVal) -> registerAndConvertSceneUA(scene, newVal));
 
         // Handle initial value
         String initialUA = scene.getUserAgentStylesheet();
-        if (initialUA != null && !initialUA.isEmpty()) {
-            String resourcePath = extractResourcePath(initialUA);
+        registerAndConvertSceneUA(scene, initialUA);
+    }
+
+    private void registerAndConvertSceneUA(Scene scene, String newVal) {
+        if (newVal != null && !newVal.isEmpty()) {
+            String resourcePath = extractResourcePath(newVal);
             sceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
                     .add(new WeakReference<>(scene));
 
-            HotReloadManager.getInstance().monitorStylesheet(initialUA, () -> refreshSceneUA(resourcePath));
+            HotReloadManager.getInstance().monitorStylesheet(newVal, () -> refreshSceneUA(resourcePath));
 
-            // In development mode, convert initial value to source URI
+            // In development mode, immediately convert to source URI
+            // (avoids ClassLoader cache returning stale content)
             if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
-                String sourceUri = resolveToSourceUri(initialUA);
-                if (!sourceUri.equals(initialUA)) {
+                String sourceUri = resolveToSourceUri(newVal);
+                if (!sourceUri.equals(newVal)) {
                     Platform.runLater(() -> {
                         scene.setUserAgentStylesheet(null);
                         scene.setUserAgentStylesheet(sourceUri);
@@ -450,29 +412,14 @@ public final class GlobalCssMonitor {
      * Monitors SubScene UA stylesheet.
      */
     private void monitorSubSceneUA(SubScene subScene) {
-        subScene.userAgentStylesheetProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !newVal.isEmpty()) {
-                String resourcePath = extractResourcePath(newVal);
-                subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
-                        .add(new WeakReference<>(subScene));
-
-                HotReloadManager.getInstance().monitorStylesheet(newVal, () -> refreshSubSceneUA(resourcePath));
-
-                // In development mode, immediately convert to source URI
-                if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
-                    String sourceUri = resolveToSourceUri(newVal);
-                    if (!sourceUri.equals(newVal)) {
-                        Platform.runLater(() -> {
-                            subScene.setUserAgentStylesheet(null);
-                            subScene.setUserAgentStylesheet(sourceUri);
-                        });
-                    }
-                }
-            }
-        });
+        subScene.userAgentStylesheetProperty().addListener((obs, oldVal, newVal) -> registerAndConvertSubSceneUA(subScene, newVal));
 
         // Handle initial value
         String initialUA = subScene.getUserAgentStylesheet();
+        registerAndConvertSubSceneUA(subScene, initialUA);
+    }
+
+    private void registerAndConvertSubSceneUA(SubScene subScene, String initialUA) {
         if (initialUA != null && !initialUA.isEmpty()) {
             String resourcePath = extractResourcePath(initialUA);
             subSceneUAOwners.computeIfAbsent(resourcePath, k -> new CopyOnWriteArrayList<>())
@@ -554,25 +501,6 @@ public final class GlobalCssMonitor {
                 stylesheets.add(i, sourceUri);
                 logger.log(Level.INFO, "Refreshed control UA stylesheet: {0}", sourceUri);
                 break;
-            }
-        }
-    }
-
-    /**
-     * Refreshes normal stylesheets for a resource path.
-     */
-    private void refreshNormalStylesheets(String resourcePath) {
-        List<WeakReference<ObservableList<String>>> owners = stylesheetOwners.get(resourcePath);
-        if (owners == null) {
-            return;
-        }
-
-        owners.removeIf(ref -> ref.get() == null);
-
-        for (WeakReference<ObservableList<String>> ref : owners) {
-            ObservableList<String> stylesheets = ref.get();
-            if (stylesheets != null) {
-                refreshStylesheetList(stylesheets, resourcePath);
             }
         }
     }
