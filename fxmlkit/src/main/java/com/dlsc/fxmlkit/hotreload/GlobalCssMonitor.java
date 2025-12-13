@@ -427,6 +427,18 @@ public final class GlobalCssMonitor {
                         .add(new WeakReference<>(scene));
 
                 HotReloadManager.getInstance().monitorStylesheet(newVal, () -> refreshSceneUA(resourcePath));
+
+                // In development mode, immediately convert to source URI
+                // (avoids ClassLoader cache returning stale content)
+                if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
+                    String sourceUri = resolveToSourceUri(newVal);
+                    if (!sourceUri.equals(newVal)) {
+                        Platform.runLater(() -> {
+                            scene.setUserAgentStylesheet(null);
+                            scene.setUserAgentStylesheet(sourceUri);
+                        });
+                    }
+                }
             }
         });
 
@@ -438,6 +450,17 @@ public final class GlobalCssMonitor {
                     .add(new WeakReference<>(scene));
 
             HotReloadManager.getInstance().monitorStylesheet(initialUA, () -> refreshSceneUA(resourcePath));
+
+            // In development mode, convert initial value to source URI
+            if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
+                String sourceUri = resolveToSourceUri(initialUA);
+                if (!sourceUri.equals(initialUA)) {
+                    Platform.runLater(() -> {
+                        scene.setUserAgentStylesheet(null);
+                        scene.setUserAgentStylesheet(sourceUri);
+                    });
+                }
+            }
         }
     }
 
@@ -452,6 +475,17 @@ public final class GlobalCssMonitor {
                         .add(new WeakReference<>(subScene));
 
                 HotReloadManager.getInstance().monitorStylesheet(newVal, () -> refreshSubSceneUA(resourcePath));
+
+                // In development mode, immediately convert to source URI
+                if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
+                    String sourceUri = resolveToSourceUri(newVal);
+                    if (!sourceUri.equals(newVal)) {
+                        Platform.runLater(() -> {
+                            subScene.setUserAgentStylesheet(null);
+                            subScene.setUserAgentStylesheet(sourceUri);
+                        });
+                    }
+                }
             }
         });
 
@@ -463,6 +497,17 @@ public final class GlobalCssMonitor {
                     .add(new WeakReference<>(subScene));
 
             HotReloadManager.getInstance().monitorStylesheet(initialUA, () -> refreshSubSceneUA(resourcePath));
+
+            // In development mode, convert initial value to source URI
+            if (HotReloadManager.getInstance().isCssHotReloadEnabled()) {
+                String sourceUri = resolveToSourceUri(initialUA);
+                if (!sourceUri.equals(initialUA)) {
+                    Platform.runLater(() -> {
+                        subScene.setUserAgentStylesheet(null);
+                        subScene.setUserAgentStylesheet(sourceUri);
+                    });
+                }
+            }
         }
     }
 

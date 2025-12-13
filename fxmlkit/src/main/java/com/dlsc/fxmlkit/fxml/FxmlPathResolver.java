@@ -1,12 +1,14 @@
 package com.dlsc.fxmlkit.fxml;
 
 import com.dlsc.fxmlkit.annotations.FxmlPath;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import javafx.scene.Parent;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -238,7 +240,16 @@ public final class FxmlPathResolver {
             return false;
         }
 
+        // In development mode, use source URI to load the latest file
+        // (avoids ClassLoader cache returning stale content)
         String uri = stylesheet.toExternalForm();
+        if (FxmlKit.isCssHotReloadEnabled()) {
+            Path sourcePath = HotReloadManager.getInstance().toSourcePath(uri);
+            if (sourcePath != null) {
+                uri = sourcePath.toUri().toString();
+            }
+        }
+
         if (!root.getStylesheets().contains(uri)) {
             root.getStylesheets().add(uri);
             logger.log(Level.FINE, "Auto-attached stylesheet: {0}", uri);
