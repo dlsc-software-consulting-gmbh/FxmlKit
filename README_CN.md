@@ -49,7 +49,7 @@ public class MyApp extends Application {
     @Override
     public void start(Stage stage) {
         FxmlKit.enableDevelopmentMode();  // ✅ 一行代码启用热更新
-        
+
         stage.setScene(new Scene(new MainView()));
         stage.show();
     }
@@ -85,7 +85,7 @@ public class LoginView extends FxmlView<LoginController> {
 ```java
 public class LoginController {
     @Inject private UserService userService;
-    
+
     @PostInject  // 自动调用
     private void afterInject() {
         // 依赖已就绪
@@ -98,7 +98,7 @@ FXML 节点也能自动注入：
 @FxmlObject  // 一个注解搞定
 public class StatusCard extends VBox {
     @Inject private StatusService statusService;
-    
+
     @PostInject
     private void afterInject() {
         updateStatus();
@@ -122,9 +122,9 @@ public class StatusCard extends VBox {
 - **零配置** — 开箱即用，无需任何设置
 - **约定优于配置** — 自动发现 FXML 和样式表文件
 - **热更新** — 开发时 FXML 和 CSS 修改即刻生效
+- **fx:include 支持** — 完整的嵌套 FXML 热更新（包括动态添加/删除的 include）
 - **可选依赖注入** — 不需要 DI 框架也能使用，需要时可以添加
 - **自动样式表** — 自动附加 `.bss` 和 `.css` 文件
-- **嵌套 FXML** — 完整支持 `<fx:include>` 层级结构
 - **JPro 就绪** — 支持多用户 Web 应用的数据隔离（每个用户会话独立 DI 容器，确保数据安全）
 - **高性能** — 智能缓存和性能优化
 
@@ -133,9 +133,10 @@ public class StatusCard extends VBox {
 | 功能 | JavaFX 原生 | FxmlKit |
 |------|------------|---------|
 | 热更新（FXML + CSS） | ❌ 需要重启应用 | ✅ 即刻刷新 |
+| fx:include 热更新 | ❌ 无 | ✅ 完整支持（子文件变化时父视图自动刷新） |
 | User Agent Stylesheet 热更新 | ❌ 无 | ✅ 全部级别（Application/Scene/SubScene/自定义控件） |
 | FXML 自动加载 | ❌ 手动编写加载代码 | ✅ 零配置自动加载 |
-| 样式表自动附加 | ❌ 手动代码附加 | ✅ 自动附加（含嵌套 FXML） |
+| 样式表自动附加 | ❌ 手动代码附加 | ✅ FxmlView 自动附加 |
 | 控制器依赖注入 | ⚠️ 需手动配置工厂 | ✅ 自动注入 |
 | **FXML 节点注入** | ❌ **几乎不可能** | ✅ **@FxmlObject 一行搞定** |
 | 多层 fx:include 支持 | ⚠️ 部分支持 | ✅ 完整支持（含注入、样式） |
@@ -167,6 +168,7 @@ FxmlKit 使用 Java 内置的 `WatchService` 实现 FXML/CSS 热更新。该服�
 | Windows | 11+ | 几乎瞬间 | 原生文件系统事件 |
 | Linux | 11+ | 几乎瞬间 | 原生文件系统事件 |
 | macOS | 11+ | 约 2 秒 | FxmlKit 已优化 |
+
 ### 安装
 
 **Maven:**
@@ -428,15 +430,21 @@ public class MyApp extends Application {
 
 ### 工作原理
 
-| 文件类型 | 行为 | 运行时状态 |
-|----------|------|------------|
-| `.fxml` | 完整视图重载 | 丢失（用户输入、滚动位置） |
-| `.css` / `.bss` | 仅刷新样式表 | **保留** |
+| 文件类型 | 行为 | 运行时状态 | fx:include |
+|----------|------|------------|------------|
+| `.fxml` | 完整视图重载 | 丢失（用户输入、滚动位置） | ✅ 子文件变化时父视图自动刷新 |
+| `.css` / `.bss` | 仅刷新样式表 | **保留** | ✅ 完整支持 |
+
+**fx:include 热更新：**
+- 编辑子 FXML → 父视图自动刷新
+- 动态添加/删除 `<fx:include>` → 无缝支持
+- 嵌套 include → 所有层级均被监控
 
 **监控的样式表类型：**
 - 普通样式表（`scene.getStylesheets()`、`parent.getStylesheets()`）
 - User Agent Stylesheet（Application、Scene、SubScene 三级）
 - 自定义控件样式表（`Region.getUserAgentStylesheet()` 重写）
+- 自动附加的样式表（约定命名的 `.css`/`.bss` 文件）
 
 ### User Agent Stylesheet 支持
 
@@ -708,7 +716,7 @@ public class CustomMenuItem extends MenuItem {
 </MenuBar>
 ```
 
-**注意：** 
+**注意：**
 - 不使用 `@FxmlObject` 的自定义对象将不会接收依赖注入（除非注入策略设置为 `AUTO`）
 - 如果使用 `AUTO` 策略但想排除某些类型，可以使用 `FxmlKit.excludeNodeType()` 或在类上添加 `@SkipInjection` 注解
 
@@ -863,6 +871,15 @@ public class StatusLabel extends Label {
 2. **文件位置：** 源文件必须在 `src/main/resources`（Maven/Gradle 标准目录）
 3. **IDE 自动构建：** 在 IDE 中启用自动构建，实现无缝热更新
 4. **调试日志：** 设置 `FxmlKit.setLogLevel(Level.FINE)` 查看热更新日志
+
+---
+
+### Q: fx:include 热更新不生效？
+
+**A:** FxmlKit 自动监控 fx:include 依赖。请检查以下几点：
+
+1. **FXML 热更新已启用：** 父 FxmlView 必须在启用 FXML 热更新之后创建（`enableDevelopmentMode()` 或 `setFxmlHotReloadEnabled(true)`）
+2. **文件存在：** 被 include 的 FXML 必须存在于源目录中
 
 ---
 
