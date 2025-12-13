@@ -50,8 +50,6 @@ public final class SourcePathConverters {
         // Utility class
     }
 
-    // ==================== Path Markers ====================
-
     /**
      * Build output directory markers.
      * Used to extract resource paths from compiled class locations.
@@ -87,8 +85,6 @@ public final class SourcePathConverters {
             "src/test/java/",
             "src/test/kotlin/",
     };
-
-    // ==================== Built-in Converters ====================
 
     /**
      * Maven project converter.
@@ -173,8 +169,6 @@ public final class SourcePathConverters {
             MAVEN, GRADLE, INTELLIJ
     );
 
-    // ==================== Utility Methods ====================
-
     /**
      * Extracts the resource path from a file system path.
      *
@@ -252,8 +246,6 @@ public final class SourcePathConverters {
             return null;
         };
     }
-
-    // ==================== Internal Methods ====================
 
     /**
      * Tries multiple path replacements and returns the first existing path.

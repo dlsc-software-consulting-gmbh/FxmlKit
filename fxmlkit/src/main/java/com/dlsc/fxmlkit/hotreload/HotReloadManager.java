@@ -91,8 +91,6 @@ public final class HotReloadManager {
      */
     private static final HotReloadManager INSTANCE = new HotReloadManager();
 
-    // ==================== Core Components ====================
-
     /**
      * Source path converters (tried in order, first match wins).
      */
@@ -107,8 +105,6 @@ public final class HotReloadManager {
      * Global CSS monitor (lazy initialized to avoid circular dependency).
      */
     private GlobalCssMonitor cssMonitor;
-
-    // ==================== Component Registry ====================
 
     /**
      * Maps resource paths to registered components.
@@ -134,8 +130,6 @@ public final class HotReloadManager {
      */
     private final Map<String, Set<String>> stylesheetToFxml = new ConcurrentHashMap<>();
 
-    // ==================== State ====================
-
     /**
      * Whether FXML hot reload is enabled.
      */
@@ -145,8 +139,6 @@ public final class HotReloadManager {
      * Whether CSS hot reload is enabled.
      */
     private volatile boolean cssHotReloadEnabled = false;
-
-    // ==================== Constructor ====================
 
     private HotReloadManager() {
         // Initialize with default converters
@@ -161,8 +153,6 @@ public final class HotReloadManager {
     public static HotReloadManager getInstance() {
         return INSTANCE;
     }
-
-    // ==================== Configuration Methods ====================
 
     /**
      * Adds a custom source path converter with highest priority.
@@ -235,8 +225,6 @@ public final class HotReloadManager {
         }
         return cssMonitor;
     }
-
-    // ==================== Core Methods ====================
 
     /**
      * Converts a runtime URI to a source file path.
@@ -422,8 +410,6 @@ public final class HotReloadManager {
             }
         }
     }
-
-    // ==================== Internal Methods ====================
 
     /**
      * Updates internal state based on configuration.

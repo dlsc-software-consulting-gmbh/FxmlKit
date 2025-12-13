@@ -69,14 +69,10 @@ public final class FileWatcher {
      */
     private static final long DEBOUNCE_MILLIS = 200;
 
-    // ==================== WatchService Components ====================
-
     private WatchService watchService;
     private Thread watchThread;
     private ScheduledExecutorService scheduler;
     private volatile boolean running = false;
-
-    // ==================== State Maps ====================
 
     /**
      * Maps directories to their WatchKeys.
@@ -99,8 +95,6 @@ public final class FileWatcher {
      */
     private final Set<Path> pendingDirs = ConcurrentHashMap.newKeySet();
 
-    // ==================== macOS Optimization ====================
-
     /**
      * HIGH sensitivity modifier for faster file detection on macOS.
      */
@@ -109,8 +103,6 @@ public final class FileWatcher {
     public FileWatcher() {
         // Empty constructor
     }
-
-    // ==================== Public API ====================
 
     /**
      * Registers a file for change monitoring.
@@ -244,8 +236,6 @@ public final class FileWatcher {
     public boolean isRunning() {
         return running;
     }
-
-    // ==================== Internal Methods ====================
 
     /**
      * Ensures a directory is being watched.

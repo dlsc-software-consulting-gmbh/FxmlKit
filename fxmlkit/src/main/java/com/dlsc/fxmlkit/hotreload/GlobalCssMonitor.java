@@ -50,8 +50,6 @@ public final class GlobalCssMonitor {
 
     private static final Logger logger = Logger.getLogger(GlobalCssMonitor.class.getName());
 
-    // ==================== Application UA Stylesheet ====================
-
     /**
      * Bridge property for Application-level User Agent Stylesheet.
      * Syncs to {@link Application#setUserAgentStylesheet(String)} on changes.
@@ -64,8 +62,6 @@ public final class GlobalCssMonitor {
      */
     private String applicationUAResourcePath;
 
-    // ==================== Scene/SubScene UA Tracking ====================
-
     /**
      * Maps resource paths to Scenes using them as UA stylesheet.
      */
@@ -76,14 +72,10 @@ public final class GlobalCssMonitor {
      */
     private final Map<String, List<WeakReference<SubScene>>> subSceneUAOwners = new HashMap<>();
 
-    // ==================== Control UA Tracking ====================
-
     /**
      * Tracks Regions that have had their getUserAgentStylesheet() promoted.
      */
     private final Map<Region, String> promotedUserAgentStylesheets = new WeakHashMap<>();
-
-    // ==================== Normal Stylesheet Tracking ====================
 
     /**
      * Tracks monitored scenes.
@@ -105,8 +97,6 @@ public final class GlobalCssMonitor {
      */
     private final Map<String, List<WeakReference<ObservableList<String>>>> stylesheetOwners = new HashMap<>();
 
-    // ==================== State ====================
-
     /**
      * Whether monitoring is active.
      */
@@ -121,8 +111,6 @@ public final class GlobalCssMonitor {
      * Listener for window list changes.
      */
     private ListChangeListener<Window> windowListListener;
-
-    // ==================== Constructor ====================
 
     /**
      * Creates a new GlobalCssMonitor.
@@ -146,8 +134,6 @@ public final class GlobalCssMonitor {
             updateApplicationUAMonitoring(oldVal, newVal);
         });
     }
-
-    // ==================== Public API ====================
 
     /**
      * Returns the Application UA Stylesheet property.
@@ -311,8 +297,6 @@ public final class GlobalCssMonitor {
         });
     }
 
-    // ==================== Scene Monitoring ====================
-
     /**
      * Monitors a scene for stylesheet changes.
      */
@@ -374,7 +358,7 @@ public final class GlobalCssMonitor {
         }
 
         // Handle Region with custom getUserAgentStylesheet()
-        if (controlUAHotReloadEnabled && node instanceof Region ) {
+        if (controlUAHotReloadEnabled && node instanceof Region) {
             Region region = (Region) node;
             promoteUserAgentStylesheet(region);
         }
@@ -399,8 +383,6 @@ public final class GlobalCssMonitor {
             }
         });
     }
-
-    // ==================== UA Stylesheet Monitoring ====================
 
     /**
      * Updates Application UA monitoring when the stylesheet changes.
@@ -576,8 +558,6 @@ public final class GlobalCssMonitor {
         }
     }
 
-    // ==================== Refresh Methods ====================
-
     /**
      * Refreshes normal stylesheets for a resource path.
      */
@@ -636,7 +616,7 @@ public final class GlobalCssMonitor {
         if (stylesheets.isEmpty()) {
             return;
         }
-        
+
         // Remove and re-add each stylesheet to force refresh
         // Convert target URI to source URI for development mode
         for (int i = stylesheets.size() - 1; i >= 0; i--) {
@@ -665,7 +645,7 @@ public final class GlobalCssMonitor {
             if (currentUA != null) {
                 // Convert classpath or target URI to source path
                 String sourceUri = resolveToSourceUri(currentUA);
-                
+
                 // Set to null then to source path to force refresh
                 Application.setUserAgentStylesheet(null);
                 Application.setUserAgentStylesheet(sourceUri);
@@ -681,9 +661,9 @@ public final class GlobalCssMonitor {
         if (uri == null) {
             return null;
         }
-        
+
         HotReloadManager manager = HotReloadManager.getInstance();
-        
+
         // 1. If already a file: URI, try to convert to source
         if (uri.startsWith("file:")) {
             Path sourcePath = manager.toSourcePath(uri);
@@ -694,10 +674,10 @@ public final class GlobalCssMonitor {
             }
             return uri;
         }
-        
+
         // 2. Handle classpath-style URI (e.g., com/example/style.css or /com/example/style.css)
         String resourcePath = uri.startsWith("/") ? uri.substring(1) : uri;
-        
+
         // Try to get the actual URL via ClassLoader
         URL url = null;
         ClassLoader contextCL = Thread.currentThread().getContextClassLoader();
@@ -707,28 +687,28 @@ public final class GlobalCssMonitor {
         if (url == null) {
             url = GlobalCssMonitor.class.getClassLoader().getResource(resourcePath);
         }
-        
+
         if (url == null) {
             logger.log(Level.FINE, "Could not find resource for classpath URI: {0}", uri);
             return uri;
         }
-        
+
         // Convert to source path
         String fileUri = url.toExternalForm();
         logger.log(Level.FINE, "ClassLoader resolved: {0} -> {1}", new Object[]{uri, fileUri});
-        
+
         Path sourcePath = manager.toSourcePath(fileUri);
         if (sourcePath != null && Files.exists(sourcePath)) {
             String result = sourcePath.toUri().toString();
             logger.log(Level.FINE, "Converted to source: {0}", result);
             return result;
         }
-        
+
         // If file protocol, use directly
         if ("file".equals(url.getProtocol())) {
             return fileUri;
         }
-        
+
         return uri;
     }
 
@@ -781,8 +761,6 @@ public final class GlobalCssMonitor {
             }
         }
     }
-
-    // ==================== Helper Methods ====================
 
     /**
      * Sets up the window listener for monitoring new windows.
