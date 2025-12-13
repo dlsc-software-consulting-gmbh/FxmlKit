@@ -163,7 +163,30 @@ public final class FxmlKit {
     /**
      * Enables or disables FXML hot reload.
      *
+     * <p><b>IMPORTANT: Call this method before creating any views!</b>
+     * Views created before enabling won't be monitored for hot reload.
+     *
+     * <p>When enabled:
+     * <ul>
+     *   <li>FXML files are loaded from source directories instead of classpath</li>
+     *   <li>File changes trigger automatic view reload</li>
+     *   <li>fx:include dependencies are automatically tracked (child changes refresh parent)</li>
+     *   <li>Dynamically added fx:include elements are detected and monitored</li>
+     * </ul>
+     *
+     * <pre>{@code
+     * // Enable only FXML hot reload (no CSS)
+     * FxmlKit.setFxmlHotReloadEnabled(true);
+     *
+     * MainView view = new MainView();  // Now monitored for hot reload
+     * }</pre>
+     *
+     * <p><b>Note:</b> For most cases, use {@link #enableDevelopmentMode()} which
+     * enables both FXML and CSS hot reload.
+     *
      * @param enabled true to enable, false to disable
+     * @see #enableDevelopmentMode()
+     * @see #isFxmlHotReloadEnabled()
      */
     public static void setFxmlHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setFxmlHotReloadEnabled(enabled);
@@ -181,16 +204,36 @@ public final class FxmlKit {
     /**
      * Enables or disables CSS hot reload.
      *
-     * <p>When enabled, monitors all stylesheets for changes:
+     * <p><b>IMPORTANT: Call this method before creating any views!</b>
+     * Stylesheets from views created before enabling won't be monitored.
+     *
+     * <p>When enabled, monitors the following stylesheet types:
      * <ul>
-     *   <li>Scene and Parent stylesheets</li>
-     *   <li>User Agent Stylesheets (Application, Scene, SubScene)</li>
+     *   <li>Scene stylesheets ({@code scene.getStylesheets()})</li>
+     *   <li>Parent stylesheets ({@code parent.getStylesheets()})</li>
+     *   <li>Auto-attached stylesheets (convention-based .css/.bss files)</li>
+     *   <li>Application User Agent Stylesheet (via {@link #setApplicationUserAgentStylesheet(String)})</li>
+     *   <li>Scene/SubScene User Agent Stylesheets</li>
      * </ul>
      *
+     * <pre>{@code
+     * // Enable only CSS hot reload (no FXML)
+     * FxmlKit.setCssHotReloadEnabled(true);
+     *
+     * MainView view = new MainView();  // Stylesheets now monitored
+     * }</pre>
+     *
      * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload
-     * requires separate enablement via {@link #setControlUAHotReloadEnabled(boolean)}.
+     * requires separate enablement via {@link #setControlUAHotReloadEnabled(boolean)}
+     * due to CSS priority implications.
+     *
+     * <p><b>Note:</b> For most cases, use {@link #enableDevelopmentMode()} which
+     * enables both FXML and CSS hot reload.
      *
      * @param enabled true to enable, false to disable
+     * @see #enableDevelopmentMode()
+     * @see #isCssHotReloadEnabled()
+     * @see #setControlUAHotReloadEnabled(boolean)
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setCssHotReloadEnabled(enabled);

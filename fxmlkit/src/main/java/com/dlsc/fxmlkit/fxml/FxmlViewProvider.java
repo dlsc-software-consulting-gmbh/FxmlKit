@@ -175,7 +175,6 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
         this.resources = resources;
     }
 
-
     /**
      * View property - updated on each load/reload.
      */
@@ -219,6 +218,26 @@ public abstract class FxmlViewProvider<T> implements HotReloadable {
             load();
         }
         return view.get();
+    }
+
+    /**
+     * Triggers FXML loading.
+     *
+     * <p>This is a convenience method equivalent to calling {@link #getView()}
+     * when you don't need the returned view instance.
+     *
+     * <p><b>Typical use case:</b> When binding to {@link #viewProperty()},
+     * use this method to trigger the initial load:
+     * <pre>{@code
+     * WelcomeViewProvider provider = new WelcomeViewProvider();
+     * root.centerProperty().bind(provider.viewProperty());
+     * provider.loadView();  // Trigger initial load
+     * }</pre>
+     *
+     * <p><b>Note:</b> If you need the view instance directly, use {@link #getView()} instead.
+     */
+    public void loadView() {
+        getView();
     }
 
     /**
