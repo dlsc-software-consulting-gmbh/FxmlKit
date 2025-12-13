@@ -1,6 +1,8 @@
 package com.dlsc.fxmlkit.fxml;
 
 import com.dlsc.fxmlkit.core.DiAdapter;
+import com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader;
+import com.dlsc.fxmlkit.fxml.internal.FxmlPathResolver;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.HotReloadable;
 import javafx.beans.property.ReadOnlyObjectProperty;

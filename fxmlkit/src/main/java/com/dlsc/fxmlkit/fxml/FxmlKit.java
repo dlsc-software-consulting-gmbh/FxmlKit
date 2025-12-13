@@ -2,6 +2,7 @@ package com.dlsc.fxmlkit.fxml;
 
 import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.core.LiteDiAdapter;
+import com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader;
 import com.dlsc.fxmlkit.hotreload.GlobalCssMonitor;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;

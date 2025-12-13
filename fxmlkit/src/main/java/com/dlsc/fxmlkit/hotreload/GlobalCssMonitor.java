@@ -505,23 +505,6 @@ public final class GlobalCssMonitor {
         }
     }
 
-    /**
-     * Refreshes a stylesheet list by removing and re-adding the stylesheet.
-     */
-    private void refreshStylesheetList(ObservableList<String> stylesheets, String resourcePath) {
-        for (int i = 0; i < stylesheets.size(); i++) {
-            String uri = stylesheets.get(i);
-            String uriResourcePath = extractResourcePath(uri);
-            if (resourcePath.equals(uriResourcePath)) {
-                stylesheets.remove(i);
-                String sourceUri = resolveToSourceUri(uri);
-                stylesheets.add(i, sourceUri);
-                logger.log(Level.INFO, "Refreshed stylesheet: {0}", sourceUri);
-                break;
-            }
-        }
-    }
-
     private void refreshSceneStylesheets(Scene scene) {
         if (scene == null) {
             logger.log(Level.WARNING, "Cannot refresh stylesheets: scene is null");

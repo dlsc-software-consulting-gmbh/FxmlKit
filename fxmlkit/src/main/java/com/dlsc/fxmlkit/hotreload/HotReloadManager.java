@@ -1,6 +1,6 @@
 package com.dlsc.fxmlkit.hotreload;
 
-import com.dlsc.fxmlkit.fxml.FxmlDependencyAnalyzer;
+import com.dlsc.fxmlkit.fxml.internal.FxmlDependencyAnalyzer;
 import javafx.application.Platform;
 import javafx.util.Callback;
 

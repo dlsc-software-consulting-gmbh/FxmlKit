@@ -1,4 +1,4 @@
-package com.dlsc.fxmlkit.core;
+package com.dlsc.fxmlkit.core.internal;
 
 import com.dlsc.fxmlkit.annotations.PostInject;
 

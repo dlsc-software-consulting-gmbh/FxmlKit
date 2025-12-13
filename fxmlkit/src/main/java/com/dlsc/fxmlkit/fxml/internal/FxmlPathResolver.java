@@ -1,6 +1,9 @@
-package com.dlsc.fxmlkit.fxml;
+package com.dlsc.fxmlkit.fxml.internal;
 
 import com.dlsc.fxmlkit.annotations.FxmlPath;
+import com.dlsc.fxmlkit.fxml.FxmlKit;
+import com.dlsc.fxmlkit.fxml.FxmlView;
+import com.dlsc.fxmlkit.fxml.FxmlViewProvider;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import javafx.scene.Parent;
 

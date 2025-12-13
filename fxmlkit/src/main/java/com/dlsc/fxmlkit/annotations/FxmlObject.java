@@ -50,7 +50,7 @@ import java.lang.annotation.Target;
  *   <li><b>DISABLED:</b> No non-controller objects are injected (annotation ignored)</li>
  * </ul>
  *
- * @see com.dlsc.fxmlkit.fxml.FxmlKitLoader
+ * @see com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader
  * @see com.dlsc.fxmlkit.policy.FxmlInjectionPolicy
  * @see com.dlsc.fxmlkit.annotations.PostInject
  */

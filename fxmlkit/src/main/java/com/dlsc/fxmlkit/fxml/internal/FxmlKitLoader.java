@@ -1,5 +1,8 @@
-package com.dlsc.fxmlkit.fxml;
+package com.dlsc.fxmlkit.fxml.internal;
 
+import com.dlsc.fxmlkit.fxml.FxmlKit;
+import com.dlsc.fxmlkit.fxml.FxmlView;
+import com.dlsc.fxmlkit.fxml.FxmlViewProvider;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.LoadListener;
 import javafx.scene.Node;
@@ -8,7 +11,7 @@ import javafx.util.Callback;
 import com.dlsc.fxmlkit.annotations.FxmlObject;
 import com.dlsc.fxmlkit.annotations.SkipInjection;
 import com.dlsc.fxmlkit.core.DiAdapter;
-import com.dlsc.fxmlkit.core.InjectionUtils;
+import com.dlsc.fxmlkit.core.internal.InjectionUtils;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 
@@ -736,7 +739,7 @@ public final class FxmlKitLoader {
      * @return a configured FXMLLoader ready to call {@link FXMLLoader#load()}
      * @see #loadWithController(DiAdapter, Class, ResourceBundle)
      */
-    static FXMLLoader createBasicLoader(URL fxmlUrl, Class<?> ownerClass, ResourceBundle resources) {
+    public static FXMLLoader createBasicLoader(URL fxmlUrl, Class<?> ownerClass, ResourceBundle resources) {
         URL actualUrl = resolveActualUrl(fxmlUrl);
         FXMLLoader loader = new FXMLLoader(actualUrl);
         loader.setClassLoader(ownerClass.getClassLoader());

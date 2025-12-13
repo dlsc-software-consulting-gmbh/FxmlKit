@@ -1,4 +1,4 @@
-package com.dlsc.fxmlkit.fxml;
+package com.dlsc.fxmlkit.fxml.internal;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
