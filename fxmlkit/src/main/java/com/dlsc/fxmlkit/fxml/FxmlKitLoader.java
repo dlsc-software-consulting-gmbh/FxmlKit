@@ -295,7 +295,8 @@ public final class FxmlKitLoader {
                 processControllersOnly(di, trackedControllers);
             }
 
-            // Auto-attach stylesheets if enabled (including nested FXMLs)
+            // Auto-attach stylesheets for root FXML only
+            // (fx:include children should declare their own stylesheets in FXML)
             if (FxmlKit.isAutoAttachStyles()) {
                 FxmlPathResolver.autoAttachStylesheets(root, url);
             }
@@ -384,7 +385,8 @@ public final class FxmlKitLoader {
                 processControllersOnly(di, trackedControllers);
             }
 
-            // Auto-attach stylesheets if enabled (including nested FXMLs)
+            // Auto-attach stylesheets for root FXML only
+            // (fx:include children should declare their own stylesheets in FXML)
             if (FxmlKit.isAutoAttachStyles()) {
                 FxmlPathResolver.autoAttachStylesheets(root, url);
             }
@@ -824,6 +826,16 @@ public final class FxmlKitLoader {
      *
      * <p><b>Thread Safety:</b> Not thread-safe, but doesn't need to be as each
      * FXMLLoader operates on a single thread.
+     */
+    /**
+     * Context for tracking FXML loading state and collecting created objects.
+     *
+     * <p>This class also handles automatic stylesheet attachment for fx:include elements:
+     * <ol>
+     *   <li>Before loading, analyzes the FXML to find all fx:include declarations</li>
+     *   <li>During loading, tracks fx:include root nodes in order</li>
+     *   <li>After loading, attaches stylesheets to each fx:include root node</li>
+     * </ol>
      */
     private static class LoadContext implements LoadListener {
 

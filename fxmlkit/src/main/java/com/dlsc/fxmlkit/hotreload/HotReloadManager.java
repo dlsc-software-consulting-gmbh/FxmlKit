@@ -124,6 +124,12 @@ public final class HotReloadManager {
     private final Map<String, Set<String>> dependencyGraph = new ConcurrentHashMap<>();
 
     /**
+     * Tracks FXMLs that have been analyzed for dependencies.
+     * Prevents redundant DOM parsing when the same FXML is used by multiple components.
+     */
+    private final Set<String> analyzedFxmls = ConcurrentHashMap.newKeySet();
+
+    /**
      * Maps CSS/BSS paths to FXML paths that use them.
      */
     private final Map<String, Set<String>> stylesheetToFxml = new ConcurrentHashMap<>();
@@ -479,9 +485,25 @@ public final class HotReloadManager {
 
         String parentPath = component.getFxmlResourcePath();
 
+        // Skip if already analyzed (avoids redundant DOM parsing)
+        if (!analyzedFxmls.add(parentPath)) {
+            logger.log(Level.FINEST, "Dependencies already analyzed for: {0}", parentPath);
+            return;
+        }
+
         try {
+            // Convert to source URL for analysis (target file may be outdated)
+            URL urlToAnalyze = fxmlUrl;
+            if (fxmlHotReloadEnabled) {
+                Path sourcePath = toSourcePath(fxmlUrl.toExternalForm());
+                if (sourcePath != null && Files.exists(sourcePath)) {
+                    urlToAnalyze = sourcePath.toUri().toURL();
+                    logger.log(Level.FINE, "Analyzing source file for dependencies: {0}", sourcePath);
+                }
+            }
+
             // FxmlDependencyAnalyzer returns Set<URI>
-            Set<URI> allFxmls = FxmlDependencyAnalyzer.findAllIncludedFxmls(fxmlUrl);
+            Set<URI> allFxmls = FxmlDependencyAnalyzer.findAllIncludedFxmls(urlToAnalyze);
 
             for (URI includedUri : allFxmls) {
                 String includedPath = uriToResourcePath(includedUri);
@@ -611,6 +633,7 @@ public final class HotReloadManager {
         converters.addAll(SourcePathConverters.DEFAULTS);
         componentsByPath.clear();
         dependencyGraph.clear();
+        analyzedFxmls.clear();
         stylesheetToFxml.clear();
     }
 }
