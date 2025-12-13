@@ -446,6 +446,10 @@ public final class HotReloadManager {
      * Reloads all components affected by a change.
      */
     private void reloadComponents(String resourcePath) {
+        // Re-analyze dependencies if this is a direct component FXML
+        // (fx:include structure may have changed since last analysis)
+        reAnalyzeDependenciesIfNeeded(resourcePath);
+
         // Find all affected paths (including parents via fx:include)
         Set<String> affectedPaths = findAffectedPaths(resourcePath);
 
@@ -470,6 +474,35 @@ public final class HotReloadManager {
                         }
                     });
                 }
+            }
+        }
+    }
+
+    /**
+     * Re-analyzes fx:include dependencies if the changed file is a registered component's FXML.
+     *
+     * <p>This handles the case where a user adds or removes fx:include elements at runtime.
+     * Without re-analysis, newly added fx:include children would not be monitored.
+     *
+     * @param resourcePath the changed FXML resource path
+     */
+    private void reAnalyzeDependenciesIfNeeded(String resourcePath) {
+        // Only re-analyze if this is a direct component FXML (not a child fx:include)
+        List<WeakReference<HotReloadable>> refs = componentsByPath.get(resourcePath);
+        if (refs == null || refs.isEmpty()) {
+            return;
+        }
+
+        // Remove from cache to allow re-analysis
+        analyzedFxmls.remove(resourcePath);
+
+        // Re-analyze using the first available component
+        for (WeakReference<HotReloadable> ref : refs) {
+            HotReloadable component = ref.get();
+            if (component != null) {
+                logger.log(Level.FINE, "Re-analyzing fx:include dependencies for: {0}", resourcePath);
+                buildDependencyGraph(component);
+                break; // Only need to analyze once per FXML
             }
         }
     }
