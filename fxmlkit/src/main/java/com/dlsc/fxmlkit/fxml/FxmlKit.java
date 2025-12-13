@@ -4,9 +4,9 @@ import com.dlsc.fxmlkit.core.DiAdapter;
 import com.dlsc.fxmlkit.core.LiteDiAdapter;
 import com.dlsc.fxmlkit.hotreload.GlobalCssMonitor;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
-import com.dlsc.fxmlkit.hotreload.StylesheetUriConverter;
 import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
 import javafx.beans.property.StringProperty;
+import javafx.util.Callback;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -60,14 +60,58 @@ public final class FxmlKit {
     }
 
     /**
-     * Enables development mode with FXML and CSS hot reload.
+     * Enables development mode (FXML and CSS hot reload).
      *
-     * <p>CSS hot reload covers all stylesheet types including User Agent Stylesheets.
+     * <p><b>IMPORTANT: Call this method before creating any views!</b>
+     *
+     * <pre>{@code
+     * public void start(Stage stage) {
+     *     FxmlKit.enableDevelopmentMode();  // Must be first!
+     *
+     *     MainView view = new MainView();   // Now creates with hot reload
+     *     // ...
+     * }
+     * }</pre>
+     *
+     * <h2>What Happens in Development Mode</h2>
+     * <ul>
+     *   <li>FXML and CSS files are loaded directly from source directories</li>
+     *   <li>File changes trigger automatic hot reload</li>
+     *   <li>fx:include relative paths resolve correctly from source</li>
+     *   <li>No manual sync or build step required</li>
+     * </ul>
+     *
+     * <h2>Supported Project Layouts</h2>
+     * <ul>
+     *   <li>Maven: {@code target/classes} → {@code src/main/resources}</li>
+     *   <li>Gradle: {@code build/classes/java/main} → {@code src/main/resources}</li>
+     *   <li>IntelliJ: {@code out/production/classes} → {@code src/main/resources}</li>
+     * </ul>
+     *
+     * <h2>Production Safety</h2>
+     * <p>If source files don't exist (e.g., when running from JAR), the system
+     * automatically falls back to classpath loading. This means it's safe to
+     * leave this call in production code, but it's recommended to guard it:
+     *
+     * <pre>{@code
+     * if (isDevelopment()) {
+     *     FxmlKit.enableDevelopmentMode();
+     * }
+     * }</pre>
+     *
+     * <h2>Custom Project Layouts</h2>
+     * <p>For non-standard layouts, register a custom converter before enabling:
+     * <pre>{@code
+     * FxmlKit.addSourcePathConverter(uri -> { ... });
+     * FxmlKit.enableDevelopmentMode();
+     * }</pre>
      *
      * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload is
      * disabled by default due to style priority changes. Enable separately via
      * {@link #setControlUAHotReloadEnabled(boolean)} if needed.
      *
+     * @see #disableDevelopmentMode()
+     * @see #addSourcePathConverter(Callback)
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
      * @see #setControlUAHotReloadEnabled(boolean)
@@ -86,43 +130,33 @@ public final class FxmlKit {
     }
 
     /**
-     * Sets the project root directory for hot reload.
+     * Adds a custom source path converter with highest priority.
      *
-     * <p>This method allows manual configuration of the project root when
-     * auto-detection fails or when using a non-standard project structure.
+     * <p>Source path converters are used during development to map runtime
+     * resource URIs (e.g., {@code file:/project/target/classes/...}) to
+     * source file paths (e.g., {@code /project/src/main/resources/...}).
      *
-     * <p>In most cases, FxmlKit can auto-detect the project root from the classpath.
-     * Use this method only when auto-detection fails (you'll see a warning in the logs).
+     * <p>Custom converters are tried before built-in converters (Maven, Gradle, IntelliJ).
+     * This is useful for non-standard project layouts.
      *
-     * <p>Call this before enabling hot reload:
+     * <h2>Example</h2>
      * <pre>{@code
-     * FxmlKit.setProjectRoot(Path.of("/path/to/project"));
-     * FxmlKit.enableDevelopmentMode();
+     * // Handle custom build output directory
+     * FxmlKit.addSourcePathConverter(uri -> {
+     *     if (uri.contains("custom-output")) {
+     *         String sourceUri = uri.replace("custom-output", "custom-source");
+     *         Path path = Path.of(URI.create(sourceUri));
+     *         return Files.exists(path) ? path : null;
+     *     }
+     *     return null;
+     * });
      * }</pre>
      *
-     * <p>Or after enabling, if you forgot:
-     * <pre>{@code
-     * FxmlKit.enableDevelopmentMode();
-     * FxmlKit.setProjectRoot(Path.of("/path/to/project"));
-     * }</pre>
-     *
-     * @param projectRoot the project root directory containing pom.xml or build.gradle
-     * @see #getProjectRoot()
+     * @param converter the converter to add (must not be null)
+     * @see com.dlsc.fxmlkit.hotreload.SourcePathConverters
      */
-    public static void setProjectRoot(Path projectRoot) {
-        HotReloadManager.getInstance().setProjectRoot(projectRoot);
-    }
-
-    /**
-     * Returns the current project root used for hot reload.
-     *
-     * <p>This returns the auto-detected or manually configured project root.
-     *
-     * @return the project root, or null if not set
-     * @see #setProjectRoot(Path)
-     */
-    public static Path getProjectRoot() {
-        return HotReloadManager.getInstance().getProjectRoot();
+    public static void addSourcePathConverter(Callback<String, Path> converter) {
+        HotReloadManager.getInstance().addConverter(converter);
     }
 
     /**
@@ -393,7 +427,6 @@ public final class FxmlKit {
         configureComponentLogger(LiteDiAdapter.class, level);
         configureComponentLogger(HotReloadManager.class, level);
         configureComponentLogger(GlobalCssMonitor.class, level);
-        configureComponentLogger(StylesheetUriConverter.class, level);
     }
 
     /**
