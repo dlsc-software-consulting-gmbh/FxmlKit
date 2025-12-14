@@ -163,10 +163,141 @@ public final class SourcePathConverters {
     };
 
     /**
+     * Plain IntelliJ IDEA project converter (non-Maven/Gradle).
+     *
+     * <p>Converts:
+     * <ul>
+     *   <li>{@code out/production/{ModuleName}/} → {@code resources/}, {@code src/}</li>
+     *   <li>{@code out/test/{ModuleName}/} → {@code resources/}, {@code src/}</li>
+     * </ul>
+     *
+     * <p>Priority: {@code resources/} is tried before {@code src/}, following
+     * the convention that resource files (FXML, CSS) should be in a separate
+     * resources directory.
+     *
+     * <h2>Supported Project Structures</h2>
+     * <pre>
+     * Project with separate resources:
+     *   out/production/MyModule/com/example/View.fxml
+     *   → resources/com/example/View.fxml ✓
+     *
+     * Project with mixed src:
+     *   out/production/MyModule/com/example/View.fxml
+     *   → src/com/example/View.fxml ✓
+     * </pre>
+     *
+     * <p>Note: This converter handles plain IntelliJ IDEA projects that don't use
+     * Maven or Gradle. For Maven/Gradle projects run within IDEA, use {@link #INTELLIJ}.
+     *
+     * @see #INTELLIJ
+     */
+    public static final Callback<String, Path> INTELLIJ_PLAIN = uri -> {
+        if (uri == null || !uri.startsWith("file:")) {
+            return null;
+        }
+        String[] markers = {"out/production/", "out/test/"};
+        for (String marker : markers) {
+            int markerIndex = uri.indexOf(marker);
+            if (markerIndex < 0) continue;
+            String prefix = uri.substring(0, markerIndex);
+            String afterMarker = uri.substring(markerIndex + marker.length());
+            int slashIndex = afterMarker.indexOf('/');
+            if (slashIndex < 0) continue;
+            String resourcePath = afterMarker.substring(slashIndex + 1);
+            String[] sourceDirs = {"resources/", "src/"};
+            for (String sourceDir : sourceDirs) {
+                String sourceUri = prefix + sourceDir + resourcePath;
+                try {
+                    Path sourcePath = Paths.get(new URI(sourceUri));
+                    if (Files.exists(sourcePath)) {
+                        logger.log(Level.FINE, "Plain IDEA: {0} → {1}",
+                                new Object[]{uri, sourcePath});
+                        return sourcePath;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return null;
+    };
+
+    /**
+     * Plain Eclipse project converter (non-Maven/Gradle).
+     */
+    public static final Callback<String, Path> ECLIPSE = uri -> {
+        if (uri == null || !uri.startsWith("file:")) {
+            return null;
+        }
+
+        String marker = "/bin/";
+        int markerIndex = uri.indexOf(marker);
+        if (markerIndex < 0) {
+            return null;
+        }
+
+        // prefix: "file:/C:/Users/.../HelloFxmlKit/"
+        String prefix = uri.substring(0, markerIndex + 1);
+        // resourcePath: "com/abc/Hello.css"
+        String resourcePath = uri.substring(markerIndex + marker.length());
+
+        String[] sourceDirs = {"resources/", "src/"};
+        for (String sourceDir : sourceDirs) {
+            String sourceUri = prefix + sourceDir + resourcePath;
+            try {
+                Path sourcePath = Paths.get(new URI(sourceUri));
+                if (Files.exists(sourcePath)) {
+                    logger.log(Level.FINE, "Eclipse: {0} → {1}",
+                            new Object[]{uri, sourcePath});
+                    return sourcePath;
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    };
+
+    /**
+     * Plain NetBeans project converter (non-Maven/Gradle).
+     */
+    public static final Callback<String, Path> NETBEANS = uri -> {
+        if (uri == null || !uri.startsWith("file:")) {
+            return null;
+        }
+
+        // exclude Gradle paths
+        if (uri.contains("build/classes/java/") || uri.contains("build/classes/kotlin/")) {
+            return null;
+        }
+
+        String marker = "/build/classes/";
+        int markerIndex = uri.indexOf(marker);
+        if (markerIndex < 0) {
+            return null;
+        }
+
+        // prefix: "file:/C:/Users/.../HelloFxmlKit/"
+        String prefix = uri.substring(0, markerIndex + 1);
+        // resourcePath: "com/abc/Hello.css"
+        String resourcePath = uri.substring(markerIndex + marker.length());
+
+        String[] sourceDirs = {"resources/", "src/"};
+        for (String sourceDir : sourceDirs) {
+            String sourceUri = prefix + sourceDir + resourcePath;
+            try {
+                Path sourcePath = Paths.get(new URI(sourceUri));
+                if (Files.exists(sourcePath)) {
+                    logger.log(Level.FINE, "NetBeans: {0} → {1}",
+                            new Object[]{uri, sourcePath});
+                    return sourcePath;
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    };
+    /**
      * Default converters (tried in order: Maven, Gradle, IntelliJ).
      */
     public static final List<Callback<String, Path>> DEFAULTS = List.of(
-            MAVEN, GRADLE, INTELLIJ
+            MAVEN, GRADLE, INTELLIJ, INTELLIJ_PLAIN, ECLIPSE, NETBEANS
     );
 
     /**
