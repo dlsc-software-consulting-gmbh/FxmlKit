@@ -1,4 +1,4 @@
-package com.dlsc.fxmlkit.policy;
+package com.dlsc.fxmlkit.di;
 
 /**
  * Policy for determining which FXML-created nodes receive dependency injection.

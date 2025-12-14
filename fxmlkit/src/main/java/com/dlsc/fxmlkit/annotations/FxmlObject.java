@@ -1,5 +1,7 @@
 package com.dlsc.fxmlkit.annotations;
 
+import com.dlsc.fxmlkit.di.FxmlInjectionPolicy;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -51,7 +53,7 @@ import java.lang.annotation.Target;
  * </ul>
  *
  * @see com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader
- * @see com.dlsc.fxmlkit.policy.FxmlInjectionPolicy
+ * @see FxmlInjectionPolicy
  * @see com.dlsc.fxmlkit.annotations.PostInject
  */
 @Documented

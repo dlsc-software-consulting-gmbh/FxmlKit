@@ -1,6 +1,6 @@
 package com.dlsc.fxmlkit.samples.tier3.multiuser;
 
-import com.dlsc.fxmlkit.core.DiAdapter;
+import com.dlsc.fxmlkit.di.DiAdapter;
 import com.dlsc.fxmlkit.fxml.FxmlView;
 
 /**

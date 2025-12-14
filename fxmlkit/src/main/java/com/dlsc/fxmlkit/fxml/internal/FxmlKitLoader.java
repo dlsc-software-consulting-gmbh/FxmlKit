@@ -10,10 +10,10 @@ import javafx.scene.Parent;
 import javafx.util.Callback;
 import com.dlsc.fxmlkit.annotations.FxmlObject;
 import com.dlsc.fxmlkit.annotations.SkipInjection;
-import com.dlsc.fxmlkit.core.DiAdapter;
-import com.dlsc.fxmlkit.core.internal.InjectionUtils;
+import com.dlsc.fxmlkit.di.DiAdapter;
+import com.dlsc.fxmlkit.di.internal.InjectionUtils;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
-import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
+import com.dlsc.fxmlkit.di.FxmlInjectionPolicy;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

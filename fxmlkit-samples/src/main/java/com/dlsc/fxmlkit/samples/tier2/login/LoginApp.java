@@ -1,6 +1,6 @@
 package com.dlsc.fxmlkit.samples.tier2.login;
 
-import com.dlsc.fxmlkit.core.LiteDiAdapter;
+import com.dlsc.fxmlkit.di.LiteDiAdapter;
 import com.dlsc.fxmlkit.fxml.FxmlKit;
 import javafx.application.Application;
 import javafx.scene.Scene;

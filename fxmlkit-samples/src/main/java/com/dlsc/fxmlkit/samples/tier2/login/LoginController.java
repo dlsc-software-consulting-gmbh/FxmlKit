@@ -13,7 +13,7 @@ import javafx.scene.control.TextField;
  *
  * <p>This controller demonstrates Tier 2 dependency injection:
  * the {@link AuthService} is automatically injected by FxmlKit
- * using the globally configured {@link com.dlsc.fxmlkit.core.DiAdapter}.</p>
+ * using the globally configured {@link com.dlsc.fxmlkit.di.DiAdapter}.</p>
  *
  * <h2>Key Points</h2>
  * <ul>
