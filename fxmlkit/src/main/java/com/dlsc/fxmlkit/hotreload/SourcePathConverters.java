@@ -17,7 +17,10 @@ import java.util.logging.Logger;
  * <ul>
  *   <li><b>Maven</b> - {@code target/classes} → {@code src/main/resources}</li>
  *   <li><b>Gradle</b> - {@code build/classes/java/main} → {@code src/main/resources}</li>
- *   <li><b>IntelliJ IDEA</b> - {@code out/production/classes} → {@code src/main/resources}</li>
+ *   <li><b>IntelliJ IDEA (Maven/Gradle)</b> - {@code out/production/classes} → {@code src/main/resources}</li>
+ *   <li><b>IntelliJ IDEA (Plain)</b> - {@code out/production/{ModuleName}/} → {@code resources/}, {@code src/}</li>
+ *   <li><b>Eclipse (Plain)</b> - {@code bin/} → {@code resources/}, {@code src/}</li>
+ *   <li><b>NetBeans (Plain)</b> - {@code build/classes/} → {@code resources/}, {@code src/}</li>
  * </ul>
  *
  * <h2>How It Works</h2>
@@ -250,7 +253,8 @@ public final class SourcePathConverters {
                             new Object[]{uri, sourcePath});
                     return sourcePath;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return null;
     };
@@ -289,7 +293,8 @@ public final class SourcePathConverters {
                             new Object[]{uri, sourcePath});
                     return sourcePath;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return null;
     };
@@ -308,6 +313,8 @@ public final class SourcePathConverters {
      * <ul>
      *   <li>{@code /project/target/classes/com/example/View.fxml} → {@code com/example/View.fxml}</li>
      *   <li>{@code /project/src/main/resources/com/example/style.css} → {@code com/example/style.css}</li>
+     *   <li>{@code /project/out/production/MyModule/com/example/View.fxml} → {@code com/example/View.fxml}</li>
+     *   <li>{@code /project/bin/com/example/View.fxml} → {@code com/example/View.fxml}</li>
      * </ul>
      *
      * <p>This method is used by both HotReloadManager and GlobalCssMonitor
@@ -321,7 +328,10 @@ public final class SourcePathConverters {
             return null;
         }
 
-        // Check output directory markers first
+        // Normalize path separators
+        filePath = filePath.replace('\\', '/');
+
+        // 1. Check standard output directory markers (Maven, Gradle, IDEA Maven/Gradle)
         for (String marker : OUTPUT_MARKERS) {
             int index = filePath.indexOf(marker);
             if (index >= 0) {
@@ -329,12 +339,55 @@ public final class SourcePathConverters {
             }
         }
 
-        // Then check source directory markers
+        // 2. Plain IDEA: out/production/{ModuleName}/ or out/test/{ModuleName}/
+        String[] ideaMarkers = {"out/production/", "out/test/"};
+        for (String marker : ideaMarkers) {
+            int markerIndex = filePath.indexOf(marker);
+            if (markerIndex >= 0) {
+                String afterMarker = filePath.substring(markerIndex + marker.length());
+                int slashIndex = afterMarker.indexOf('/');
+                if (slashIndex >= 0) {
+                    return afterMarker.substring(slashIndex + 1);
+                }
+            }
+        }
+
+        // 3. Eclipse: /bin/
+        String binMarker = "/bin/";
+        int binIndex = filePath.indexOf(binMarker);
+        if (binIndex >= 0) {
+            return filePath.substring(binIndex + binMarker.length());
+        }
+
+        // 4. NetBeans: /build/classes/ (exclude Gradle paths)
+        if (!filePath.contains("build/classes/java/") && !filePath.contains("build/classes/kotlin/")) {
+            String nbMarker = "/build/classes/";
+            int nbIndex = filePath.indexOf(nbMarker);
+            if (nbIndex >= 0) {
+                return filePath.substring(nbIndex + nbMarker.length());
+            }
+        }
+
+        // 5. Check source directory markers
         for (String marker : SOURCE_MARKERS) {
             int index = filePath.indexOf(marker);
             if (index >= 0) {
                 return filePath.substring(index + marker.length());
             }
+        }
+
+        // 6. Plain src/ directory
+        String srcMarker = "/src/";
+        int srcIndex = filePath.indexOf(srcMarker);
+        if (srcIndex >= 0) {
+            return filePath.substring(srcIndex + srcMarker.length());
+        }
+
+        // 7. Plain resources/ directory
+        String resMarker = "/resources/";
+        int resIndex = filePath.indexOf(resMarker);
+        if (resIndex >= 0) {
+            return filePath.substring(resIndex + resMarker.length());
         }
 
         return null;
