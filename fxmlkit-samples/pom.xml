@@ -37,7 +37,7 @@
             <version>${project.version}</version>
         </dependency>
 
-           <dependency>
+        <dependency>
             <groupId>com.dlsc.fxmlkit</groupId>
             <artifactId>fxmlkit-guice</artifactId>
             <version>${project.version}</version>
@@ -57,6 +57,12 @@
             <groupId>com.google.inject</groupId>
             <artifactId>guice</artifactId>
             <version>7.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>fr.brouillard.oss</groupId>
+            <artifactId>cssfx</artifactId>
+            <version>11.5.1</version>
         </dependency>
 
     </dependencies>

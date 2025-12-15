@@ -1,4 +1,4 @@
-package com.dlsc.fxmlkit.core;
+package com.dlsc.fxmlkit.di;
 
 /**
  * Adapter interface for dependency injection frameworks.

@@ -1,7 +1,8 @@
 package com.dlsc.fxmlkit.samples.tier3.multiuser;
 
 
-import com.dlsc.fxmlkit.core.DiAdapter;
+import com.dlsc.fxmlkit.di.DiAdapter;
+import com.dlsc.fxmlkit.fxml.FxmlKit;
 import com.dlsc.fxmlkit.guice.GuiceDiAdapter;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
@@ -46,6 +47,7 @@ public class MultiUserApp extends Application {
 
     @Override
     public void start(Stage stage) {
+        FxmlKit.enableDevelopmentMode();
         // Create tabs for different "users" - each with isolated session
         Tab aliceTab = createUserTab("Alice");
         Tab bobTab = createUserTab("Bob");

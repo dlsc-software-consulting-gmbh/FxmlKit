@@ -1,5 +1,7 @@
 package com.dlsc.fxmlkit.annotations;
 
+import com.dlsc.fxmlkit.di.FxmlInjectionPolicy;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -50,8 +52,8 @@ import java.lang.annotation.Target;
  *   <li><b>DISABLED:</b> No non-controller objects are injected (annotation ignored)</li>
  * </ul>
  *
- * @see com.dlsc.fxmlkit.fxml.FxmlKitLoader
- * @see com.dlsc.fxmlkit.policy.FxmlInjectionPolicy
+ * @see com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader
+ * @see FxmlInjectionPolicy
  * @see com.dlsc.fxmlkit.annotations.PostInject
  */
 @Documented

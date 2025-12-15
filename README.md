@@ -49,7 +49,7 @@ public class MyApp extends Application {
     @Override
     public void start(Stage stage) {
         FxmlKit.enableDevelopmentMode();  // ✅ One line to enable hot reload
-        
+
         stage.setScene(new Scene(new MainView()));
         stage.show();
     }
@@ -85,7 +85,7 @@ Controller auto-injection:
 ```java
 public class LoginController {
     @Inject private UserService userService;
-    
+
     @PostInject  // Automatically invoked
     private void afterInject() {
         // Dependencies are ready
@@ -98,7 +98,7 @@ FXML nodes can also receive auto-injection:
 @FxmlObject  // One annotation to enable injection
 public class StatusCard extends VBox {
     @Inject private StatusService statusService;
-    
+
     @PostInject
     private void afterInject() {
         updateStatus();
@@ -122,9 +122,9 @@ FXML usage:
 - **Zero Configuration** — Works out of the box, no setup required
 - **Convention over Configuration** — Automatically discovers FXML and stylesheet files
 - **Hot Reload** — FXML and CSS changes reflect instantly during development
+- **fx:include Support** — Full hot reload for nested FXML hierarchies (including dynamically added/removed includes)
 - **Optional Dependency Injection** — Works without DI frameworks, add them when needed
 - **Automatic Stylesheets** — Auto-attaches `.bss` and `.css` files
-- **Nested FXML** — Full support for `<fx:include>` hierarchies
 - **JPro Ready** — Supports multi-user web application data isolation (independent DI container per user session for data security)
 - **High Performance** — Intelligent caching and performance optimization
 
@@ -133,9 +133,10 @@ FXML usage:
 | Feature | Native JavaFX | FxmlKit |
 |---------|---------------|---------|
 | Hot Reload (FXML + CSS) | ❌ Restart required | ✅ Instant refresh |
+| fx:include Hot Reload | ❌ None | ✅ Full support (parent auto-refreshes when child changes) |
 | User Agent Stylesheet Hot Reload | ❌ None | ✅ All levels (App/Scene/SubScene/Custom Control) |
 | Automatic FXML Loading | ❌ Manual loading code | ✅ Zero-config auto-loading |
-| Automatic Stylesheet Attachment | ❌ Manual code required | ✅ Auto-attach (including nested FXML) |
+| Automatic Stylesheet Attachment | ❌ Manual code required | ✅ Auto-attach for FxmlView |
 | Controller Dependency Injection | ⚠️ Manual factory setup | ✅ Automatic injection |
 | **FXML Node Injection** | ❌ **Nearly impossible** | ✅ **@FxmlObject - one line** |
 | Multi-layer fx:include Support | ⚠️ Partial support | ✅ Full support (with injection & styles) |
@@ -155,21 +156,18 @@ FXML usage:
 
 ### Requirements
 
-- **Java:** 11 or higher (17.0.4+ recommended)
+- **Java:** 11 or higher
 - **JavaFX:** 11 or higher (17+ recommended)
 
 #### Hot Reload Performance Note
 
 FxmlKit uses Java's built-in `WatchService` for FXML/CSS hot reload. Performance varies across operating systems:
 
-| OS | Java Version | File Change Detection Delay |
-|----|--------------|----------------------------|
-| Windows | 11+ | Near-instant |
-| Linux | 11+ | Near-instant |
-| macOS | 11 ~ 17.0.3 | ~10 seconds |
-| macOS | 17.0.4+ | ~2 seconds |
-
-> **Note:** For compatibility, the Java version in pom.xml is set to 11. macOS users running fxmlkit-samples demos should upgrade to JDK 17.0.4 or higher for a better hot reload experience.
+| OS | Java Version | File Change Detection Delay | Note |
+|----|--------------|----------------------------|------|
+| Windows | 11+ | Near-instant | Native file system events |
+| Linux | 11+ | Near-instant | Native file system events |
+| macOS | 11+ | ~2 seconds | FxmlKit optimized |
 
 ### Installation
 
@@ -432,15 +430,21 @@ public class MyApp extends Application {
 
 ### How It Works
 
-| File Type | Behavior | Runtime State |
-|-----------|----------|---------------|
-| `.fxml` | Full view reload | Lost (user input, scroll position) |
-| `.css` / `.bss` | Stylesheet refresh only | **Preserved** |
+| File Type | Behavior | Runtime State | fx:include |
+|-----------|----------|---------------|------------|
+| `.fxml` | Full view reload | Lost (user input, scroll position) | ✅ Parent auto-refreshes when child changes |
+| `.css` / `.bss` | Stylesheet refresh only | **Preserved** | ✅ Fully supported |
+
+**fx:include Hot Reload:**
+- Edit a child FXML → Parent view automatically reloads
+- Dynamically add/remove `<fx:include>` → Works seamlessly
+- Nested includes → All levels monitored
 
 **Monitored Stylesheets:**
 - Normal stylesheets (`scene.getStylesheets()`, `parent.getStylesheets()`)
 - User Agent Stylesheets (Application, Scene, SubScene levels)
 - Custom control stylesheets (`Region.getUserAgentStylesheet()` overrides)
+- Auto-attached stylesheets (convention-based `.css`/`.bss` files)
 
 ### User Agent Stylesheet Support
 
@@ -873,6 +877,15 @@ public class StatusLabel extends Label {
 2. **File location:** Source files must be in `src/main/resources` (Maven/Gradle standard)
 3. **IDE auto-build:** Enable automatic build in your IDE for seamless hot reload
 4. **Debug logging:** Set `FxmlKit.setLogLevel(Level.FINE)` to see hot reload messages
+
+---
+
+### Q: fx:include hot reload not working?
+
+**A:** FxmlKit automatically monitors fx:include dependencies. Check these:
+
+1. **FXML hot reload enabled:** Parent FxmlView must be created after enabling FXML hot reload (`enableDevelopmentMode()` or `setFxmlHotReloadEnabled(true)`)
+2. **File exists:** Included FXML must exist in source directory
 
 ---
 

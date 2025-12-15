@@ -1,13 +1,15 @@
 package com.dlsc.fxmlkit.fxml;
 
-import com.dlsc.fxmlkit.core.DiAdapter;
-import com.dlsc.fxmlkit.core.LiteDiAdapter;
-import com.dlsc.fxmlkit.hotreload.HotReloadManager;
+import com.dlsc.fxmlkit.di.DiAdapter;
+import com.dlsc.fxmlkit.di.LiteDiAdapter;
+import com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader;
 import com.dlsc.fxmlkit.hotreload.GlobalCssMonitor;
-import com.dlsc.fxmlkit.hotreload.StylesheetUriConverter;
-import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
+import com.dlsc.fxmlkit.di.FxmlInjectionPolicy;
 import javafx.beans.property.StringProperty;
+import javafx.util.Callback;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -59,14 +61,58 @@ public final class FxmlKit {
     }
 
     /**
-     * Enables development mode with FXML and CSS hot reload.
+     * Enables development mode (FXML and CSS hot reload).
      *
-     * <p>CSS hot reload covers all stylesheet types including User Agent Stylesheets.
+     * <p><b>IMPORTANT: Call this method before creating any views!</b>
+     *
+     * <pre>{@code
+     * public void start(Stage stage) {
+     *     FxmlKit.enableDevelopmentMode();  // Must be first!
+     *
+     *     MainView view = new MainView();   // Now creates with hot reload
+     *     // ...
+     * }
+     * }</pre>
+     *
+     * <h2>What Happens in Development Mode</h2>
+     * <ul>
+     *   <li>FXML and CSS files are loaded directly from source directories</li>
+     *   <li>File changes trigger automatic hot reload</li>
+     *   <li>fx:include relative paths resolve correctly from source</li>
+     *   <li>No manual sync or build step required</li>
+     * </ul>
+     *
+     * <h2>Supported Project Layouts</h2>
+     * <ul>
+     *   <li>Maven: {@code target/classes} → {@code src/main/resources}</li>
+     *   <li>Gradle: {@code build/classes/java/main} → {@code src/main/resources}</li>
+     *   <li>IntelliJ: {@code out/production/classes} → {@code src/main/resources}</li>
+     * </ul>
+     *
+     * <h2>Production Safety</h2>
+     * <p>If source files don't exist (e.g., when running from JAR), the system
+     * automatically falls back to classpath loading. This means it's safe to
+     * leave this call in production code, but it's recommended to guard it:
+     *
+     * <pre>{@code
+     * if (isDevelopment()) {
+     *     FxmlKit.enableDevelopmentMode();
+     * }
+     * }</pre>
+     *
+     * <h2>Custom Project Layouts</h2>
+     * <p>For non-standard layouts, register a custom converter before enabling:
+     * <pre>{@code
+     * FxmlKit.addSourcePathConverter(uri -> { ... });
+     * FxmlKit.enableDevelopmentMode();
+     * }</pre>
      *
      * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload is
      * disabled by default due to style priority changes. Enable separately via
      * {@link #setControlUAHotReloadEnabled(boolean)} if needed.
      *
+     * @see #disableDevelopmentMode()
+     * @see #addSourcePathConverter(Callback)
      * @see #setFxmlHotReloadEnabled(boolean)
      * @see #setCssHotReloadEnabled(boolean)
      * @see #setControlUAHotReloadEnabled(boolean)
@@ -85,9 +131,62 @@ public final class FxmlKit {
     }
 
     /**
+     * Adds a custom source path converter with highest priority.
+     *
+     * <p>Source path converters are used during development to map runtime
+     * resource URIs (e.g., {@code file:/project/target/classes/...}) to
+     * source file paths (e.g., {@code /project/src/main/resources/...}).
+     *
+     * <p>Custom converters are tried before built-in converters (Maven, Gradle, IntelliJ).
+     * This is useful for non-standard project layouts.
+     *
+     * <h2>Example</h2>
+     * <pre>{@code
+     * // Handle custom build output directory
+     * FxmlKit.addSourcePathConverter(uri -> {
+     *     if (uri.contains("custom-output")) {
+     *         String sourceUri = uri.replace("custom-output", "custom-source");
+     *         Path path = Path.of(URI.create(sourceUri));
+     *         return Files.exists(path) ? path : null;
+     *     }
+     *     return null;
+     * });
+     * }</pre>
+     *
+     * @param converter the converter to add (must not be null)
+     * @see com.dlsc.fxmlkit.hotreload.SourcePathConverters
+     */
+    public static void addSourcePathConverter(Callback<String, Path> converter) {
+        HotReloadManager.getInstance().addConverter(converter);
+    }
+
+    /**
      * Enables or disables FXML hot reload.
      *
+     * <p><b>IMPORTANT: Call this method before creating any views!</b>
+     * Views created before enabling won't be monitored for hot reload.
+     *
+     * <p>When enabled:
+     * <ul>
+     *   <li>FXML files are loaded from source directories instead of classpath</li>
+     *   <li>File changes trigger automatic view reload</li>
+     *   <li>fx:include dependencies are automatically tracked (child changes refresh parent)</li>
+     *   <li>Dynamically added fx:include elements are detected and monitored</li>
+     * </ul>
+     *
+     * <pre>{@code
+     * // Enable only FXML hot reload (no CSS)
+     * FxmlKit.setFxmlHotReloadEnabled(true);
+     *
+     * MainView view = new MainView();  // Now monitored for hot reload
+     * }</pre>
+     *
+     * <p><b>Note:</b> For most cases, use {@link #enableDevelopmentMode()} which
+     * enables both FXML and CSS hot reload.
+     *
      * @param enabled true to enable, false to disable
+     * @see #enableDevelopmentMode()
+     * @see #isFxmlHotReloadEnabled()
      */
     public static void setFxmlHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setFxmlHotReloadEnabled(enabled);
@@ -105,16 +204,36 @@ public final class FxmlKit {
     /**
      * Enables or disables CSS hot reload.
      *
-     * <p>When enabled, monitors all stylesheets for changes:
+     * <p><b>IMPORTANT: Call this method before creating any views!</b>
+     * Stylesheets from views created before enabling won't be monitored.
+     *
+     * <p>When enabled, monitors the following stylesheet types:
      * <ul>
-     *   <li>Scene and Parent stylesheets</li>
-     *   <li>User Agent Stylesheets (Application, Scene, SubScene)</li>
+     *   <li>Scene stylesheets ({@code scene.getStylesheets()})</li>
+     *   <li>Parent stylesheets ({@code parent.getStylesheets()})</li>
+     *   <li>Auto-attached stylesheets (convention-based .css/.bss files)</li>
+     *   <li>Application User Agent Stylesheet (via {@link #setApplicationUserAgentStylesheet(String)})</li>
+     *   <li>Scene/SubScene User Agent Stylesheets</li>
      * </ul>
      *
+     * <pre>{@code
+     * // Enable only CSS hot reload (no FXML)
+     * FxmlKit.setCssHotReloadEnabled(true);
+     *
+     * MainView view = new MainView();  // Stylesheets now monitored
+     * }</pre>
+     *
      * <p><b>Note:</b> Control {@code getUserAgentStylesheet()} hot reload
-     * requires separate enablement via {@link #setControlUAHotReloadEnabled(boolean)}.
+     * requires separate enablement via {@link #setControlUAHotReloadEnabled(boolean)}
+     * due to CSS priority implications.
+     *
+     * <p><b>Note:</b> For most cases, use {@link #enableDevelopmentMode()} which
+     * enables both FXML and CSS hot reload.
      *
      * @param enabled true to enable, false to disable
+     * @see #enableDevelopmentMode()
+     * @see #isCssHotReloadEnabled()
+     * @see #setControlUAHotReloadEnabled(boolean)
      */
     public static void setCssHotReloadEnabled(boolean enabled) {
         HotReloadManager.getInstance().setCssHotReloadEnabled(enabled);
@@ -352,7 +471,6 @@ public final class FxmlKit {
         configureComponentLogger(LiteDiAdapter.class, level);
         configureComponentLogger(HotReloadManager.class, level);
         configureComponentLogger(GlobalCssMonitor.class, level);
-        configureComponentLogger(StylesheetUriConverter.class, level);
     }
 
     /**

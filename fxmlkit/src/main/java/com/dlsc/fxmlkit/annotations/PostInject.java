@@ -79,7 +79,7 @@ import java.lang.annotation.Target;
  * }</pre>
  *
  * @see com.dlsc.fxmlkit.annotations.FxmlObject
- * @see com.dlsc.fxmlkit.core.DiAdapter
+ * @see com.dlsc.fxmlkit.di.DiAdapter
  */
 @Documented
 @Target(ElementType.METHOD)

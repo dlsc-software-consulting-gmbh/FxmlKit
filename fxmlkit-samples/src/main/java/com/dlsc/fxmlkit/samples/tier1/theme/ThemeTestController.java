@@ -22,6 +22,7 @@ public class ThemeTestController implements Initializable {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         FxmlKit.setApplicationUserAgentStylesheet(LIGHT_THEME);
+        System.out.println("Initialized with Light Theme (User Agent Stylesheet)");
     }
 
     @FXML

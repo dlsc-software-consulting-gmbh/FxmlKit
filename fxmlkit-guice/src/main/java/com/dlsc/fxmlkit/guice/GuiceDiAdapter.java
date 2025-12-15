@@ -1,6 +1,6 @@
 package com.dlsc.fxmlkit.guice;
 
-import com.dlsc.fxmlkit.core.BaseDiAdapter;
+import com.dlsc.fxmlkit.di.BaseDiAdapter;
 import com.google.inject.Injector;
 
 import java.util.Objects;

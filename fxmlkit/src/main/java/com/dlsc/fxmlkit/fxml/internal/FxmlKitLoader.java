@@ -1,5 +1,8 @@
-package com.dlsc.fxmlkit.fxml;
+package com.dlsc.fxmlkit.fxml.internal;
 
+import com.dlsc.fxmlkit.fxml.FxmlKit;
+import com.dlsc.fxmlkit.fxml.FxmlView;
+import com.dlsc.fxmlkit.fxml.FxmlViewProvider;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.LoadListener;
 import javafx.scene.Node;
@@ -7,15 +10,18 @@ import javafx.scene.Parent;
 import javafx.util.Callback;
 import com.dlsc.fxmlkit.annotations.FxmlObject;
 import com.dlsc.fxmlkit.annotations.SkipInjection;
-import com.dlsc.fxmlkit.core.DiAdapter;
-import com.dlsc.fxmlkit.core.InjectionUtils;
-import com.dlsc.fxmlkit.policy.FxmlInjectionPolicy;
+import com.dlsc.fxmlkit.di.DiAdapter;
+import com.dlsc.fxmlkit.di.internal.InjectionUtils;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
+import com.dlsc.fxmlkit.di.FxmlInjectionPolicy;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -42,6 +48,7 @@ import java.util.logging.Logger;
  *   <li>@PostInject lifecycle callback support</li>
  *   <li>Thread-safe URL caching for performance</li>
  *   <li>Per-load state management (no static pollution)</li>
+ *   <li>Development mode: load FXML directly from source directory</li>
  * </ul>
  *
  * <h2>FXML File Resolution</h2>
@@ -146,6 +153,59 @@ public final class FxmlKitLoader {
     }
 
     /**
+     * Resolves the actual URL to use for FXML loading.
+     *
+     * <p>In development mode (hot reload enabled), this method attempts to
+     * resolve the FXML file from the source directory instead of the build
+     * output directory. This enables:
+     * <ul>
+     *   <li>Direct editing of source files without sync</li>
+     *   <li>Automatic resolution of relative paths (fx:include, stylesheets)</li>
+     *   <li>Immediate reflection of changes on hot reload</li>
+     * </ul>
+     *
+     * <p>Safety: If the source file doesn't exist (e.g., in production JAR),
+     * this method falls back to the original classpath URL.
+     *
+     * @param classpathUrl the URL from classpath (may point to target/classes or JAR)
+     * @return the actual URL to use (source file in dev mode, original otherwise)
+     */
+    static URL resolveActualUrl(URL classpathUrl) {
+        if (classpathUrl == null) {
+            return null;
+        }
+
+        // If hot reload is not enabled, use classpath URL directly
+        if (!HotReloadManager.getInstance().isEnabled()) {
+            return classpathUrl;
+        }
+
+        // Try to convert to source path
+        String runtimeUri = classpathUrl.toExternalForm();
+        Path sourcePath = HotReloadManager.getInstance().toSourcePath(runtimeUri);
+
+        // If source exists, use it
+        if (sourcePath != null && Files.exists(sourcePath)) {
+            try {
+                URL sourceUrl = sourcePath.toUri().toURL();
+                logger.log(Level.FINE, "Using source file: {0}", sourcePath);
+                return sourceUrl;
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Failed to create source URL, using classpath: {0}",
+                        e.getMessage());
+            }
+        } else {
+            // Development mode is enabled but source file not found
+            // This is expected in production (JAR/exe), but worth logging in case of misconfiguration
+            logger.log(Level.FINE, "Source file not found (normal in production), using classpath: {0}",
+                    classpathUrl);
+        }
+
+        // Fallback to classpath URL
+        return classpathUrl;
+    }
+
+    /**
      * Loads an FXML file and returns the root node.
      *
      * <p>This is the simplest loading method. FXML file is resolved based on
@@ -169,6 +229,7 @@ public final class FxmlKitLoader {
      * <p>Performs the following steps:
      * <ol>
      *   <li>Resolves FXML URL from owner class (with caching)</li>
+     *   <li>In development mode, redirects to source file if available</li>
      *   <li>Creates {@link FXMLLoader} with DI-based controller factory</li>
      *   <li>Collects all FXML-created objects via {@link LoadListener}</li>
      *   <li>Injects dependencies into controller (priority) and other objects</li>
@@ -194,7 +255,8 @@ public final class FxmlKitLoader {
      * @throws RuntimeException         if dependency injection or lifecycle methods fail
      */
     public static Parent load(DiAdapter di, Class<?> ownerClass, ResourceBundle resources) {
-        URL url = URL_CACHE.computeIfAbsent(ownerClass, FxmlPathResolver::resolveFxmlUrl);
+        URL classpathUrl = URL_CACHE.computeIfAbsent(ownerClass, FxmlPathResolver::resolveFxmlUrl);
+        URL url = resolveActualUrl(classpathUrl);
 
         Set<Object> trackedControllers = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -236,7 +298,8 @@ public final class FxmlKitLoader {
                 processControllersOnly(di, trackedControllers);
             }
 
-            // Auto-attach stylesheets if enabled (including nested FXMLs)
+            // Auto-attach stylesheets for root FXML only
+            // (fx:include children should declare their own stylesheets in FXML)
             if (FxmlKit.isAutoAttachStyles()) {
                 FxmlPathResolver.autoAttachStylesheets(root, url);
             }
@@ -282,7 +345,8 @@ public final class FxmlKitLoader {
      */
     @SuppressWarnings("unchecked")
     public static <T> LoadResult<T> loadWithController(DiAdapter di, Class<?> ownerClass, ResourceBundle resources) {
-        URL url = URL_CACHE.computeIfAbsent(ownerClass, FxmlPathResolver::resolveFxmlUrl);
+        URL classpathUrl = URL_CACHE.computeIfAbsent(ownerClass, FxmlPathResolver::resolveFxmlUrl);
+        URL url = resolveActualUrl(classpathUrl);
 
         Set<Object> trackedControllers = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -324,7 +388,8 @@ public final class FxmlKitLoader {
                 processControllersOnly(di, trackedControllers);
             }
 
-            // Auto-attach stylesheets if enabled (including nested FXMLs)
+            // Auto-attach stylesheets for root FXML only
+            // (fx:include children should declare their own stylesheets in FXML)
             if (FxmlKit.isAutoAttachStyles()) {
                 FxmlPathResolver.autoAttachStylesheets(root, url);
             }
@@ -674,8 +739,9 @@ public final class FxmlKitLoader {
      * @return a configured FXMLLoader ready to call {@link FXMLLoader#load()}
      * @see #loadWithController(DiAdapter, Class, ResourceBundle)
      */
-    static FXMLLoader createBasicLoader(URL fxmlUrl, Class<?> ownerClass, ResourceBundle resources) {
-        FXMLLoader loader = new FXMLLoader(fxmlUrl);
+    public static FXMLLoader createBasicLoader(URL fxmlUrl, Class<?> ownerClass, ResourceBundle resources) {
+        URL actualUrl = resolveActualUrl(fxmlUrl);
+        FXMLLoader loader = new FXMLLoader(actualUrl);
         loader.setClassLoader(ownerClass.getClassLoader());
 
         if (resources != null) {
@@ -763,6 +829,16 @@ public final class FxmlKitLoader {
      *
      * <p><b>Thread Safety:</b> Not thread-safe, but doesn't need to be as each
      * FXMLLoader operates on a single thread.
+     */
+    /**
+     * Context for tracking FXML loading state and collecting created objects.
+     *
+     * <p>This class also handles automatic stylesheet attachment for fx:include elements:
+     * <ol>
+     *   <li>Before loading, analyzes the FXML to find all fx:include declarations</li>
+     *   <li>During loading, tracks fx:include root nodes in order</li>
+     *   <li>After loading, attaches stylesheets to each fx:include root node</li>
+     * </ol>
      */
     private static class LoadContext implements LoadListener {
 

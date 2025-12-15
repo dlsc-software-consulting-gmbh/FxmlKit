@@ -1,15 +1,17 @@
-package com.dlsc.fxmlkit.fxml;
+package com.dlsc.fxmlkit.fxml.internal;
 
 import com.dlsc.fxmlkit.annotations.FxmlPath;
+import com.dlsc.fxmlkit.fxml.FxmlKit;
+import com.dlsc.fxmlkit.fxml.FxmlView;
+import com.dlsc.fxmlkit.fxml.FxmlViewProvider;
+import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import javafx.scene.Parent;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
-import java.util.Set;
+import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -20,7 +22,6 @@ import java.util.logging.Logger;
  * <ul>
  *   <li>FXML files (@FxmlPath annotation, exact match, suffix stripping)</li>
  *   <li>Stylesheets (.bss/.css files relative to FXML location)</li>
- *   <li>Nested FXML dependencies (via fx:include)</li>
  * </ul>
  *
  * <h2>FXML Resolution Algorithm</h2>
@@ -43,12 +44,10 @@ import java.util.logging.Logger;
  * </ol>
  *
  * <h2>Automatic Stylesheet Attachment</h2>
- * <p>The enhanced {@link #autoAttachStylesheets(Parent, URL)} method now supports:
- * <ul>
- *   <li>Automatic discovery of nested FXML files via {@code <fx:include>}</li>
- *   <li>Stylesheet attachment for all FXMLs in the hierarchy</li>
- *   <li>Optimization: Skip if stylesheet already declared in FXML</li>
- * </ul>
+ * <p>The {@link #autoAttachStylesheets(Parent, URL)} method automatically attaches
+ * the stylesheet for the root FXML only. For {@code <fx:include>} nested FXMLs,
+ * stylesheets should be declared explicitly in the child FXML to ensure proper
+ * CSS scope isolation.
  *
  * <h2>Thread Safety</h2>
  * <p>This class is stateless and thread-safe. All methods can be called concurrently.
@@ -57,7 +56,6 @@ import java.util.logging.Logger;
  * @see FxmlView
  * @see FxmlViewProvider
  * @see FxmlKitLoader
- * @see FxmlDependencyAnalyzer
  */
 public final class FxmlPathResolver {
 
@@ -171,44 +169,32 @@ public final class FxmlPathResolver {
     }
 
     /**
-     * Auto-attaches stylesheets to a Parent node for the entire FXML hierarchy.
+     * Auto-attaches stylesheets to a Parent node for the root FXML only.
      *
-     * <p>This method now supports nested FXML files via {@code <fx:include>}:
-     * <ol>
-     *   <li>Analyzes the FXML dependency tree to find all nested FXMLs</li>
-     *   <li>For each FXML (including root and all includes):
-     *     <ul>
-     *       <li>Checks if same-name stylesheet already declared in root node</li>
-     *       <li>If not declared, attempts to attach .bss or .css from same directory</li>
-     *     </ul>
-     *   </li>
-     * </ol>
+     * <p>This method attaches the stylesheet for the root FXML to the root node.
+     * For {@code <fx:include>} nested FXMLs, stylesheets should be declared
+     * explicitly in the child FXML using {@code stylesheets="@ChildName.css"}
+     * to ensure proper CSS scope isolation.
      *
-     * <p><b>Optimization:</b> If the root node already declares a stylesheet with the
-     * same filename as the FXML (e.g., {@code Main.css} for {@code Main.fxml}), the
-     * automatic attachment is skipped for that FXML. This respects user intent and
-     * avoids unnecessary file system checks.
+     * <p><b>Why only root FXML?</b>
+     * <ul>
+     *   <li>CSS added to root affects ALL descendants, including fx:include children</li>
+     *   <li>If child FXML's CSS is added to root, it may pollute parent's styles</li>
+     *   <li>Example: Both parent and child have {@code .title-label} - adding child's
+     *       CSS to root would override parent's styling</li>
+     * </ul>
      *
-     * <p><b>Simple Rule:</b> Only checks for same-directory, same-name stylesheets.
-     * If FXML declares {@code css/Main.css}, we still check for {@code Main.css} in
-     * the FXML's directory.
-     *
-     * <h3>Example</h3>
+     * <p><b>Recommended Pattern for fx:include:</b>
      * <pre>{@code
-     * // Main.fxml includes ChildA.fxml, which includes ChildA1.fxml
-     * URL mainUrl = getClass().getResource("Main.fxml");
-     * Parent root = FXMLLoader.load(mainUrl);
-     * FxmlPathResolver.autoAttachStylesheets(root, mainUrl);
-     *
-     * // Result: Attempts to attach (if not already declared):
-     * // - Main.css or Main.bss (same directory as Main.fxml)
-     * // - ChildA.css or ChildA.bss (same directory as ChildA.fxml)
-     * // - ChildA1.css or ChildA1.bss (same directory as ChildA1.fxml)
+     * <!-- Child.fxml - declare stylesheet explicitly -->
+     * <VBox stylesheets="@Child.css" ...>
+     *     ...
+     * </VBox>
      * }</pre>
      *
      * @param root    the root node to attach stylesheets to (must not be null)
      * @param fxmlUrl the root FXML file URL
-     * @return true if at least one stylesheet was attached, false otherwise
+     * @return true if a stylesheet was attached, false otherwise
      */
     public static boolean autoAttachStylesheets(Parent root, URL fxmlUrl) {
         if (root == null) {
@@ -221,27 +207,9 @@ public final class FxmlPathResolver {
             return false;
         }
 
-        boolean anyAttached = false;
-
-        // Find all FXMLs in the dependency tree (including root)
-        Set<URI> allFxmlUris = FxmlDependencyAnalyzer.findAllIncludedFxmls(fxmlUrl);
-
-        logger.log(Level.FINE, "Auto-attaching stylesheets for {0} FXML file(s)",
-                allFxmlUris.size());
-
-        // Attach stylesheet for each FXML
-        for (URI fxmlUri : allFxmlUris) {
-            try {
-                // Convert URI to URL for I/O operations
-                URL fxml = fxmlUri.toURL();
-                boolean attached = autoAttachStylesheetForSingleFxml(root, fxml);
-                anyAttached = anyAttached || attached;
-            } catch (MalformedURLException e) {
-                logger.log(Level.WARNING, "Invalid URI, cannot convert to URL: " + fxmlUri, e);
-            }
-        }
-
-        return anyAttached;
+        // Only attach stylesheet for the root FXML to avoid style pollution
+        // fx:include children should declare their own stylesheets in their FXML files
+        return autoAttachStylesheetForSingleFxml(root, fxmlUrl);
     }
 
     /**
@@ -275,7 +243,16 @@ public final class FxmlPathResolver {
             return false;
         }
 
+        // In development mode, use source URI to load the latest file
+        // (avoids ClassLoader cache returning stale content)
         String uri = stylesheet.toExternalForm();
+        if (FxmlKit.isCssHotReloadEnabled()) {
+            Path sourcePath = HotReloadManager.getInstance().toSourcePath(uri);
+            if (sourcePath != null) {
+                uri = sourcePath.toUri().toString();
+            }
+        }
+
         if (!root.getStylesheets().contains(uri)) {
             root.getStylesheets().add(uri);
             logger.log(Level.FINE, "Auto-attached stylesheet: {0}", uri);

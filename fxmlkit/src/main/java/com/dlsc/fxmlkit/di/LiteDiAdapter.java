@@ -1,4 +1,6 @@
-package com.dlsc.fxmlkit.core;
+package com.dlsc.fxmlkit.di;
+
+import com.dlsc.fxmlkit.di.internal.InjectionUtils;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
