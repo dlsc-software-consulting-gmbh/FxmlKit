@@ -17,6 +17,7 @@ import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -82,7 +83,7 @@ public final class GlobalCssMonitor {
     /**
      * Tracks stylesheet lists that already have listeners.
      */
-    private final Set<ObservableList<String>> listenedStylesheets = ConcurrentHashMap.newKeySet();
+    private final Set<ObservableList<String>> listenedStylesheets =   Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     /**
      * Maps resource paths to their stylesheet list owners.
@@ -103,6 +104,13 @@ public final class GlobalCssMonitor {
      * Listener for window list changes.
      */
     private ListChangeListener<Window> windowListListener;
+
+    /**
+     * Track stylesheet lists that are currently being refreshed.
+     * Used to prevent re-registration of callbacks during refresh operations,
+     * which was causing memory leaks (each refresh added new callbacks).
+     */
+    private final Set<ObservableList<String>> refreshingLists = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates a new GlobalCssMonitor.
@@ -217,6 +225,7 @@ public final class GlobalCssMonitor {
         sceneUAOwners.clear();
         subSceneUAOwners.clear();
         promotedUserAgentStylesheets.clear();
+        refreshingLists.clear();
 
         logger.log(Level.FINE, "GlobalCssMonitor stopped");
     }
@@ -239,6 +248,12 @@ public final class GlobalCssMonitor {
         // Monitor list changes
         if (!listenedStylesheets.contains(stylesheets)) {
             stylesheets.addListener((ListChangeListener<String>) change -> {
+                // Skip re-registration if we're refreshing
+                if (refreshingLists.contains(stylesheets)) {
+                    logger.log(Level.FINEST, "Skipping re-registration during refresh");
+                    return;
+                }
+
                 while (change.next()) {
                     for (String added : change.getAddedSubList()) {
                         registerStylesheetUri(added, stylesheets);
@@ -491,17 +506,23 @@ public final class GlobalCssMonitor {
 
         String stylesheetResourcePath = extractResourcePath(stylesheet);
 
-        for (int i = 0; i < stylesheets.size(); i++) {
-            String uri = stylesheets.get(i);
-            String uriResourcePath = extractResourcePath(uri);
+        // Mark as refreshing to prevent re-registration
+        refreshingLists.add(stylesheets);
+        try {
+            for (int i = 0; i < stylesheets.size(); i++) {
+                String uri = stylesheets.get(i);
+                String uriResourcePath = extractResourcePath(uri);
 
-            if (stylesheetResourcePath != null && stylesheetResourcePath.equals(uriResourcePath)) {
-                stylesheets.remove(i);
-                String sourceUri = resolveToSourceUri(uri);
-                stylesheets.add(i, sourceUri);
-                logger.log(Level.INFO, "Refreshed control UA stylesheet: {0}", sourceUri);
-                break;
+                if (stylesheetResourcePath != null && stylesheetResourcePath.equals(uriResourcePath)) {
+                    stylesheets.remove(i);
+                    String sourceUri = resolveToSourceUri(uri);
+                    stylesheets.add(i, sourceUri);
+                    logger.log(Level.INFO, "Refreshed control UA stylesheet: {0}", sourceUri);
+                    break;
+                }
             }
+        } finally {
+            refreshingLists.remove(stylesheets);
         }
     }
 
@@ -528,14 +549,20 @@ public final class GlobalCssMonitor {
             return;
         }
 
-        // Remove and re-add each stylesheet to force refresh
-        // Convert target URI to source URI for development mode
-        for (int i = stylesheets.size() - 1; i >= 0; i--) {
-            String uri = stylesheets.get(i);
-            stylesheets.remove(i);
-            String sourceUri = resolveToSourceUri(uri);
-            stylesheets.add(i, sourceUri);
-            logger.log(Level.INFO, "Refreshed stylesheet: {0}", sourceUri);
+        // Mark this list as refreshing to prevent callback re-registration
+        refreshingLists.add(stylesheets);
+        try {
+            // Remove and re-add each stylesheet to force refresh
+            // Convert target URI to source URI for development mode
+            for (int i = stylesheets.size() - 1; i >= 0; i--) {
+                String uri = stylesheets.get(i);
+                stylesheets.remove(i);
+                String sourceUri = resolveToSourceUri(uri);
+                stylesheets.add(i, sourceUri);
+                logger.log(Level.INFO, "Refreshed stylesheet: {0}", sourceUri);
+            }
+        } finally {
+            refreshingLists.remove(stylesheets);
         }
     }
 

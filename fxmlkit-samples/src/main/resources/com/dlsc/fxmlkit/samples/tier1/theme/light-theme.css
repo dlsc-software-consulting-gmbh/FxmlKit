@@ -22,7 +22,7 @@
 }
 
 .button:hover {
-    -fx-background-color: derive(#0096c9, -10%);
+    -fx-background-color: derive(-fx-primary, -15%);
 }
 
 .title-label {

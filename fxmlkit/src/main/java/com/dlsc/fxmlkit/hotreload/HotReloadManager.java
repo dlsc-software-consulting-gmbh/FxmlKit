@@ -355,6 +355,11 @@ public final class HotReloadManager {
     /**
      * Monitors a stylesheet for changes.
      *
+     * <p>Note: This method intentionally allows multiple callbacks for the same file path.
+     * Different Scene/Parent instances may use the same CSS file, and each needs its own
+     * refresh callback. The memory leak prevention is handled in GlobalCssMonitor via
+     * the refreshingLists mechanism, not here.
+     *
      * @param uri       the stylesheet URI
      * @param onChanged callback when the stylesheet changes
      */
@@ -365,6 +370,11 @@ public final class HotReloadManager {
 
         Path path = resolveWatchablePath(uri);
         if (path != null) {
+            // NOTE: We intentionally do NOT deduplicate here.
+            // Multiple Scene/Parent instances may share the same CSS file,
+            // and each needs its own callback to refresh properly.
+            // Memory leak prevention is handled by GlobalCssMonitor.refreshingLists,
+            // which prevents callback accumulation during refresh operations.
             fileWatcher.watch(path, () -> Platform.runLater(onChanged));
         }
     }
