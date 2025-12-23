@@ -192,7 +192,7 @@ implementation 'com.dlsc.fxmlkit:fxmlkit:1.4.0'
 <dependency>
     <groupId>com.dlsc.fxmlkit</groupId>
     <artifactId>fxmlkit-guice</artifactId>
-    <version>1.0.0</version>
+    <version>1.4.0</version>
 </dependency>
 <dependency>
     <groupId>com.google.inject</groupId>
