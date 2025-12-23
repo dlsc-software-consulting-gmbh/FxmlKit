@@ -17,6 +17,7 @@ import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -82,7 +83,7 @@ public final class GlobalCssMonitor {
     /**
      * Tracks stylesheet lists that already have listeners.
      */
-    private final Set<ObservableList<String>> listenedStylesheets = ConcurrentHashMap.newKeySet();
+    private final Set<ObservableList<String>> listenedStylesheets =   Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     /**
      * Maps resource paths to their stylesheet list owners.
