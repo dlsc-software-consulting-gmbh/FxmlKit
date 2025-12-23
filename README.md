@@ -203,7 +203,7 @@ implementation 'com.dlsc.fxmlkit:fxmlkit:1.4.0'
 
 **Gradle:**
 ```gradle
-implementation 'com.dlsc.fxmlkit:fxmlkit-guice:1.0.0'
+implementation 'com.dlsc.fxmlkit:fxmlkit-guice:1.4.0'
 implementation 'com.google.inject:guice:7.0.0'
 ```
 
