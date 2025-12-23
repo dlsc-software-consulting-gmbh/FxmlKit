@@ -1,5 +1,9 @@
 # FxmlKit
 
+[![JFXCentral](https://img.shields.io/badge/Find_me_on-JFXCentral-blue?logo=googlechrome&logoColor=white)](https://www.jfx-central.com/libraries/fxmlkit)
+[![Maven Central](https://img.shields.io/maven-central/v/com.dlsc.fxmlkit/fxmlkit?color=brightgreen)](https://search.maven.org/search?q=g:com.dlsc.fxmlkit%20AND%20a:fxmlkit)
+[![Java Version](https://img.shields.io/badge/Java_Version-11+-ff69b4)](https://github.com/openjdk/jdk)
+[![JavaFX Version](https://img.shields.io/badge/JavaFX_Version-11+-brightgreen)](https://github.com/openjdk/jfx)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 **FxmlKit = Automatic FXML Loading + Hot Reload + Optional Dependency Injection**
