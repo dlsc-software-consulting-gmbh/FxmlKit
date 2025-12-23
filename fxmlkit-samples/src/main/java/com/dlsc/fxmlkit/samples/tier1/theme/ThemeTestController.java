@@ -18,17 +18,19 @@ public class ThemeTestController implements Initializable {
 
     private static final String LIGHT_THEME = "com/dlsc/fxmlkit/samples/tier1/theme/light-theme.css";
     private static final String DARK_THEME = "com/dlsc/fxmlkit/samples/tier1/theme/dark-theme.css";
+    private static String currentTheme = LIGHT_THEME;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        FxmlKit.setApplicationUserAgentStylesheet(LIGHT_THEME);
-        System.out.println("Initialized with Light Theme (User Agent Stylesheet)");
+        FxmlKit.setApplicationUserAgentStylesheet(currentTheme);
+        System.out.println("Initialized with " + (currentTheme.equals(LIGHT_THEME) ? "Light Theme" : "Dark Theme"));
     }
 
     @FXML
     public void switchToLight() {
         if (getScene() != null) {
             FxmlKit.setApplicationUserAgentStylesheet(LIGHT_THEME);
+            currentTheme = LIGHT_THEME;
             currentThemeLabel.setText("Current: Light Theme");
             System.out.println("Switched to Light Theme (User Agent Stylesheet)");
         }
@@ -38,6 +40,7 @@ public class ThemeTestController implements Initializable {
     public void switchToDark() {
         if (getScene() != null) {
             FxmlKit.setApplicationUserAgentStylesheet((DARK_THEME));
+            currentTheme = DARK_THEME;
             currentThemeLabel.setText("Current: Dark Theme");
             System.out.println("Switched to Dark Theme (User Agent Stylesheet)");
         }
