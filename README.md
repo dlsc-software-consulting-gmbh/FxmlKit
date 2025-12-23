@@ -176,7 +176,7 @@ FxmlKit uses Java's built-in `WatchService` for FXML/CSS hot reload. Performance
 <dependency>
     <groupId>com.dlsc.fxmlkit</groupId>
     <artifactId>fxmlkit</artifactId>
-    <version>1.4.0</version>
+    <version>1.5.0</version>
 </dependency>
 ```
 
@@ -192,7 +192,7 @@ implementation 'com.dlsc.fxmlkit:fxmlkit:1.4.0'
 <dependency>
     <groupId>com.dlsc.fxmlkit</groupId>
     <artifactId>fxmlkit-guice</artifactId>
-    <version>1.4.0</version>
+    <version>1.5.0</version>
 </dependency>
 <dependency>
     <groupId>com.google.inject</groupId>
@@ -203,7 +203,7 @@ implementation 'com.dlsc.fxmlkit:fxmlkit:1.4.0'
 
 **Gradle:**
 ```gradle
-implementation 'com.dlsc.fxmlkit:fxmlkit-guice:1.4.0'
+implementation 'com.dlsc.fxmlkit:fxmlkit-guice:1.5.0'
 implementation 'com.google.inject:guice:7.0.0'
 ```
 
