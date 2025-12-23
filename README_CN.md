@@ -176,13 +176,13 @@ FxmlKit 使用 Java 内置的 `WatchService` 实现 FXML/CSS 热更新。该服�
 <dependency>
     <groupId>com.dlsc.fxmlkit</groupId>
     <artifactId>fxmlkit</artifactId>
-    <version>1.0.0</version>
+    <version>1.4.0</version>
 </dependency>
 ```
 
 **Gradle:**
 ```gradle
-implementation 'com.dlsc.fxmlkit:fxmlkit:1.0.0'
+implementation 'com.dlsc.fxmlkit:fxmlkit:1.4.0'
 ```
 
 **如果需要使用 Guice 来进行依赖注入：** 直接依赖 `fxmlkit-guice` 即可（已包含核心模块）
