@@ -6,6 +6,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +73,8 @@ public class LiteDiAdapter extends BaseDiAdapter {
      * Tracks objects that have already been member-injected (for idempotency).
      * Uses identity-based comparison to ensure same object instance.
      */
-    private final Set<Object> injectedObjects = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<Object> injectedObjects =
+            Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
 
     /**
      * Tracks types currently being created in each thread to detect circular dependencies.
