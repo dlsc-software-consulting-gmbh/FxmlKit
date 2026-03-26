@@ -5,6 +5,7 @@ import com.dlsc.fxmlkit.fxml.internal.FxmlKitLoader;
 import com.dlsc.fxmlkit.fxml.internal.FxmlPathResolver;
 import com.dlsc.fxmlkit.hotreload.HotReloadManager;
 import com.dlsc.fxmlkit.hotreload.HotReloadable;
+import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.fxml.FXMLLoader;
@@ -249,6 +250,10 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
      * @param resources the new resource bundle, or null to keep current
      */
     public void reload(ResourceBundle resources) {
+        if (!Platform.isFxApplicationThread()) {
+            throw new IllegalStateException("reload() must be called on the JavaFX Application Thread");
+        }
+
         logger.log(Level.FINE, "Reloading FxmlView: {0}", getClass().getSimpleName());
 
         this.getChildren().clear();

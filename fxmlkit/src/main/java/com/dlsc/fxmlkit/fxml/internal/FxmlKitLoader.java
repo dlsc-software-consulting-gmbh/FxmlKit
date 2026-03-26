@@ -255,60 +255,7 @@ public final class FxmlKitLoader {
      * @throws RuntimeException         if dependency injection or lifecycle methods fail
      */
     public static Parent load(DiAdapter di, Class<?> ownerClass, ResourceBundle resources) {
-        URL classpathUrl = URL_CACHE.computeIfAbsent(ownerClass, FxmlPathResolver::resolveFxmlUrl);
-        URL url = resolveActualUrl(classpathUrl);
-
-        Set<Object> trackedControllers = Collections.newSetFromMap(new IdentityHashMap<>());
-
-        try {
-            // Wrap controllerFactory to track ALL controllers (including from fx:include)
-            Callback<Class<?>, Object> trackingFactory = type -> {
-                // Phase 1: Create instance (constructor injection only)
-                Object controller = di.getInstance(type);
-
-                // Phase 2: Inject members BEFORE returning to JavaFX
-                // Unconditional injection - trust DI framework's idempotency
-                // This ensures Initializable.initialize() sees injected fields
-                di.injectMembers(controller);
-
-                trackedControllers.add(controller);
-                logger.log(Level.FINE, "Controller created and injected: {0}",
-                        controller.getClass().getSimpleName());
-                return controller;
-            };
-
-            FXMLLoader loader = new FXMLLoader(url);
-            loader.setControllerFactory(trackingFactory);
-            loader.setClassLoader(ownerClass.getClassLoader());
-            if (resources != null) {
-                loader.setResources(resources);
-            }
-
-            // Use LoadListener to collect all FXML-created objects
-            LoadContext context = new LoadContext();
-            loader.setLoadListener(context);
-
-            Parent root = loader.load();
-
-            // Inject dependencies into all collected objects
-            if (FxmlKit.getFxmlInjectionPolicy() != FxmlInjectionPolicy.DISABLED) {
-                injectAll(di, loader, context.getAllObjects(), trackedControllers);
-            } else {
-                // When policy is DISABLED, only process controllers
-                processControllersOnly(di, trackedControllers);
-            }
-
-            // Auto-attach stylesheets for root FXML only
-            // (fx:include children should declare their own stylesheets in FXML)
-            if (FxmlKit.isAutoAttachStyles()) {
-                FxmlPathResolver.autoAttachStylesheets(root, url);
-            }
-
-            return root;
-
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to load FXML for " + ownerClass.getName() + " from URL: " + url, e);
-        }
+        return loadWithController(di, ownerClass, resources).getView();
     }
 
     /**
