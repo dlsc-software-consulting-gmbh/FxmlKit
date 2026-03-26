@@ -10,11 +10,11 @@ import javafx.beans.property.StringProperty;
 import javafx.util.Callback;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -39,8 +39,8 @@ public final class FxmlKit {
     private static boolean autoAttachStyles = true;
     private static FxmlInjectionPolicy fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
 
-    private static final Set<Class<?>> INCLUDE_NODE_TYPES = new HashSet<>();
-    private static final Set<Class<?>> EXCLUDE_NODE_TYPES = new HashSet<>();
+    private static final Set<Class<?>> INCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
+    private static final Set<Class<?>> EXCLUDE_NODE_TYPES = ConcurrentHashMap.newKeySet();
 
     private static final List<String> DEFAULT_SKIP_PACKAGE_PREFIXES = List.of(
             "java.",
@@ -51,7 +51,7 @@ public final class FxmlKit {
             "com.sun."
     );
 
-    private static final List<String> SKIP_PACKAGE_PREFIXES = new ArrayList<>(DEFAULT_SKIP_PACKAGE_PREFIXES);
+    private static final List<String> SKIP_PACKAGE_PREFIXES = new CopyOnWriteArrayList<>(DEFAULT_SKIP_PACKAGE_PREFIXES);
 
     static {
         configureDefaultLogging();
