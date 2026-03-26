@@ -22,6 +22,8 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- JavaFX 11 has no mac-aarch64 artifact; use 17 so samples can run on Apple Silicon -->
+        <javafx.version>17.0.17</javafx.version>
     </properties>
 
     <licenses>

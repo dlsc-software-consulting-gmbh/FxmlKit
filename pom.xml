@@ -55,7 +55,7 @@
         <java.version>11</java.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
-        <javafx.version>17.0.17</javafx.version>
+        <javafx.version>11</javafx.version>
     </properties>
 
     <dependencyManagement>
