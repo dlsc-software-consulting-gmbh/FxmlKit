@@ -35,6 +35,7 @@ A modern JavaFX FXML framework that eliminates boilerplate code, provides FXML/C
 - [Hot Reload](#hot-reload)
 - [Core Concepts](#core-concepts)
 - [Annotations](#annotations)
+- [Internationalization (i18n)](#internationalization-i18n)
 - [FAQ](#faq)
 - [Sample Projects](#sample-projects)
 
@@ -759,6 +760,44 @@ public class UserProfileController {
 - Must be no-arg
 - Can have any access modifier (private, protected, public)
 - Supports inheritance (parent class `@PostInject` methods execute first)
+
+---
+
+## Internationalization (i18n)
+
+FXML supports resource bundle references using the `%key` prefix:
+
+```xml
+<Label text="%welcome.message" />
+```
+
+### Global ResourceBundle
+
+Set a global `ResourceBundle` once at application startup, and all views will use it automatically:
+
+```java
+public void start(Stage stage) {
+    FxmlKit.setResourceBundle(ResourceBundle.getBundle("messages"));
+
+    // All views automatically use the global bundle — no extra code needed
+    MainView mainView = new MainView();
+    SettingsView settingsView = new SettingsView();
+}
+```
+
+### Per-View Override
+
+If a specific view needs a different bundle, pass it via the constructor — it takes precedence over the global setting:
+
+```java
+public class SpecialView extends FxmlView<SpecialController> {
+    public SpecialView() {
+        super(ResourceBundle.getBundle("special"));
+    }
+}
+```
+
+> **Note:** `FxmlKit.setResourceBundle()` is a static global setting, intended for Tier 1/2 (desktop single-user) scenarios. Tier 3 (JPro multi-user) applications should pass `ResourceBundle` via constructor for each user session.
 
 ---
 

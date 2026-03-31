@@ -35,6 +35,7 @@ new MainView(diAdapter);
 - [热更新](#热更新)
 - [核心概念](#核心概念)
 - [注解](#注解)
+- [国际化 (i18n)](#国际化-i18n)
 - [常见问题](#常见问题)
 - [示例项目](#示例项目)
 
@@ -753,6 +754,44 @@ public class UserProfileController {
 - 必须是无参方法
 - 可以是任何访问级别（private、protected、public）
 - 支持继承（父类的 @PostInject 方法会先执行）
+
+---
+
+## 国际化 (i18n)
+
+FXML 支持通过 `%key` 前缀引用资源包中的文本：
+
+```xml
+<Label text="%welcome.message" />
+```
+
+### 全局 ResourceBundle
+
+在应用启动时设置一次全局 `ResourceBundle`，所有视图自动使用：
+
+```java
+public void start(Stage stage) {
+    FxmlKit.setResourceBundle(ResourceBundle.getBundle("messages"));
+
+    // 所有视图自动使用全局 bundle，无需额外代码
+    MainView mainView = new MainView();
+    SettingsView settingsView = new SettingsView();
+}
+```
+
+### 单独覆盖
+
+如果某个视图需要使用不同的 bundle，通过构造函数传入即可，始终优先于全局设置：
+
+```java
+public class SpecialView extends FxmlView<SpecialController> {
+    public SpecialView() {
+        super(ResourceBundle.getBundle("special"));
+    }
+}
+```
+
+> **注意：** `FxmlKit.setResourceBundle()` 是静态全局设置，适用于 Tier 1/2（桌面单用户）场景。Tier 3（JPro 多用户）应用应通过构造函数为每个用户会话传入各自的 `ResourceBundle`。
 
 ---
 
