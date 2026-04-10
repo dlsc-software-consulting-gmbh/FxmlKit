@@ -125,14 +125,19 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
      * <p>Used for Tier 1 when no DiAdapter is configured (zero-config mode),
      * or Tier 2 when a global DiAdapter is set via {@code FxmlKit.setDiAdapter()}.
      *
+     * <p>If a global ResourceBundle is set via {@link FxmlKit#setResourceBundle(ResourceBundle)},
+     * it will be used automatically.
+     *
      * <p>The FXML is loaded immediately during construction.
      */
     protected FxmlView() {
-        this(FxmlKit.getDiAdapter(), null);
+        this(FxmlKit.getDiAdapter(), FxmlKit.getResourceBundle());
     }
 
     /**
-     * Constructs the view with a resource bundle using global DiAdapter (Tier 1/2).
+     * Constructs the view with an explicit resource bundle using global DiAdapter (Tier 1/2).
+     *
+     * <p>The provided bundle takes precedence over any global ResourceBundle.
      *
      * @param resources the resource bundle for i18n (may be null)
      */
@@ -146,10 +151,13 @@ public abstract class FxmlView<C> extends StackPane implements HotReloadable {
      * <p>Used for Tier 3 (isolated DI) scenarios where each user session has its own
      * DiAdapter instance.
      *
+     * <p>If a global ResourceBundle is set via {@link FxmlKit#setResourceBundle(ResourceBundle)},
+     * it will be used automatically.
+     *
      * @param diAdapter the DiAdapter for dependency injection (may be null for zero-config)
      */
     protected FxmlView(DiAdapter diAdapter) {
-        this(diAdapter, null);
+        this(diAdapter, FxmlKit.getResourceBundle());
     }
 
     /**

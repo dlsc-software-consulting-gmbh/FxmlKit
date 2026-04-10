@@ -10,6 +10,7 @@ import javafx.beans.property.StringProperty;
 import javafx.util.Callback;
 
 import java.nio.file.Path;
+import java.util.ResourceBundle;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -36,6 +37,7 @@ public final class FxmlKit {
 
     private static Level globalLogLevel = Level.WARNING;
     private static DiAdapter globalDiAdapter = null;
+    private static ResourceBundle globalResourceBundle = null;
     private static boolean autoAttachStyles = true;
     private static FxmlInjectionPolicy fxmlInjectionPolicy = FxmlInjectionPolicy.EXPLICIT_ONLY;
 
@@ -360,6 +362,30 @@ public final class FxmlKit {
      */
     public static DiAdapter getDiAdapter() {
         return globalDiAdapter;
+    }
+
+    /**
+     * Sets the global resource bundle for i18n.
+     *
+     * <p>When set, {@link FxmlView} and {@link FxmlViewProvider} will use this bundle
+     * automatically unless an explicit bundle is passed via constructor.
+     *
+     * <p>This is intended for Tier 1/2 (desktop single-user) scenarios.
+     * Tier 3 (multi-user) applications should pass ResourceBundle via constructor instead.
+     *
+     * @param bundle the resource bundle, or null to clear
+     */
+    public static void setResourceBundle(ResourceBundle bundle) {
+        globalResourceBundle = bundle;
+    }
+
+    /**
+     * Returns the current global resource bundle.
+     *
+     * @return the current resource bundle, or null if none configured
+     */
+    public static ResourceBundle getResourceBundle() {
+        return globalResourceBundle;
     }
 
     /**
