@@ -35,6 +35,17 @@ public final class FxmlKit {
 
     private static final String ROOT_PACKAGE_NAME = "com.dlsc.fxmlkit";
 
+    /**
+     * System property name for enabling development mode via JVM argument.
+     *
+     * <p>When set to {@code true} (case-insensitive), FxmlKit automatically enables
+     * both FXML and CSS hot reload at class-load time — equivalent to calling
+     * {@link #enableDevelopmentMode()}.
+     *
+     * <p>Usage: {@code java -Dfxmlkit.devmode=true -jar myapp.jar}
+     */
+    public static final String DEVMODE_PROPERTY = "fxmlkit.devmode";
+
     private static Level globalLogLevel = Level.WARNING;
     private static DiAdapter globalDiAdapter = null;
     private static ResourceBundle globalResourceBundle = null;
@@ -57,6 +68,7 @@ public final class FxmlKit {
 
     static {
         configureDefaultLogging();
+        applyDevModeSystemProperty();
     }
 
     private FxmlKit() {
@@ -101,6 +113,24 @@ public final class FxmlKit {
      *     FxmlKit.enableDevelopmentMode();
      * }
      * }</pre>
+     *
+     * <h2>JVM Argument Alternative</h2>
+     * <p>Instead of calling this method from code, development mode can be toggled
+     * via the {@code -D}{@value #DEVMODE_PROPERTY}{@code =true} system property.
+     * FxmlKit reads this property at class-load time and enables development mode
+     * automatically when set.
+     *
+     * <p><b>Accepted values:</b> only the literal {@code true} (case-insensitive)
+     * activates development mode. Any other value — including {@code false},
+     * {@code 1}, {@code yes}, or an absent property — leaves the initial state
+     * disabled. The JVM property cannot be used to explicitly <i>force off</i>
+     * development mode; use {@link #disableDevelopmentMode()} from code instead.
+     *
+     * <p>When both the JVM argument and explicit code calls are present, the
+     * <b>last-writer-wins</b> rule applies — code calls made during application
+     * startup execute after the static property read and therefore take precedence.
+     * This lets you force-enable or force-disable mode from code even when the
+     * JVM flag is set to the opposite value.
      *
      * <h2>Custom Project Layouts</h2>
      * <p>For non-standard layouts, register a custom converter before enabling:
@@ -454,6 +484,12 @@ public final class FxmlKit {
 
     /**
      * Resets all FxmlKit configuration to defaults.
+     *
+     * <p><b>Note:</b> this method does <i>not</i> re-apply the
+     * {@link #DEVMODE_PROPERTY} system property. The JVM flag is read exactly
+     * once during class initialization; after {@code resetAll()}, development
+     * mode is always disabled regardless of how the JVM was launched. Re-enable
+     * it explicitly via {@link #enableDevelopmentMode()} if needed.
      */
     public static void resetAll() {
         globalDiAdapter = null;
@@ -476,6 +512,31 @@ public final class FxmlKit {
             applyLogLevel(Level.WARNING);
         } catch (Exception e) {
             System.err.println("Warning: Failed to configure FxmlKit logging: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Applies the {@link #DEVMODE_PROPERTY} system property at class-load time.
+     *
+     * <p>When set to {@code true} (case-insensitive), both FXML and CSS hot reload
+     * are enabled. Any code call to {@link #enableDevelopmentMode()} or
+     * {@link #disableDevelopmentMode()} after class loading will override this
+     * initial state (last-writer-wins).
+     */
+    private static void applyDevModeSystemProperty() {
+        Logger logger = Logger.getLogger(FxmlKit.class.getName());
+        try {
+            if (Boolean.getBoolean(DEVMODE_PROPERTY)) {
+                // Delegate to enableDevelopmentMode() so future additions to that
+                // method are automatically picked up by the JVM-flag path.
+                enableDevelopmentMode();
+                logger.log(Level.INFO,
+                        "Development mode enabled via -D{0}=true",
+                        DEVMODE_PROPERTY);
+            }
+        } catch (Exception e) {
+            logger.log(Level.WARNING,
+                    "Failed to apply system property '" + DEVMODE_PROPERTY + "'", e);
         }
     }
 

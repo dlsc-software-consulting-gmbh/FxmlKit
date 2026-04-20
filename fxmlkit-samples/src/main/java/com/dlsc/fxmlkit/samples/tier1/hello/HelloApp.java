@@ -9,9 +9,19 @@ public class HelloApp extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        // Enable FXML/CSS hot reload - edit files and see changes instantly without restart
-        // Recommended for development only; comment out or remove for production
-        FxmlKit.enableDevelopmentMode();
+        // Enable FXML/CSS hot reload - edit files and see changes instantly without restart.
+        // Recommended for development only; comment out or remove for production.
+        //
+        // Alternative: omit this call entirely and launch with a JVM argument instead:
+        //     java -Dfxmlkit.devmode=true ...
+        // FxmlKit reads the "fxmlkit.devmode" system property at class-load time and
+        // enables development mode automatically when set to "true" (case-insensitive).
+        // Other values (false / 1 / yes / unset) leave dev mode off.
+        //
+        // Conflict rule: code calls win. enableDevelopmentMode() / disableDevelopmentMode()
+        // always override the JVM flag (last-writer-wins), because code runs after the
+        // static property read. Handy for forcing a mode regardless of how the JVM was launched.
+        FxmlKit.enableDevelopmentMode(); // -Dfxmlkit.devmode=true
 
         HelloView helloView = new HelloView();
 
