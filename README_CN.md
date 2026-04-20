@@ -561,28 +561,30 @@ public class MyApp extends Application {
 }
 ```
 
-**方式二：使用 JVM 参数自动切换**
+**方式二：使用内置 JVM 参数自动切换**
+
+FxmlKit 在类加载时会读取 `-Dfxmlkit.devmode` 系统属性，设置为 `true` 时自动启用
+热更新——代码中不需要调用 `enableDevelopmentMode()`：
 
 ```java
 public class MyApp extends Application {
-    // 通过 JVM 参数设置：-Ddev.mode=true
-    private static final boolean DEV_MODE = Boolean.getBoolean("dev.mode");
-    
     @Override
     public void start(Stage stage) {
-        if (DEV_MODE) {
-            FxmlKit.enableDevelopmentMode();
-        }
-        
+        // 无需显式调用 enableDevelopmentMode()，由 -Dfxmlkit.devmode 控制
         stage.setScene(new Scene(new MainView()));
         stage.show();
     }
 }
 ```
 
-开发环境运行：`java -Ddev.mode=true -jar myapp.jar`
+开发环境运行：`java -Dfxmlkit.devmode=true -jar myapp.jar`
 
 生产环境运行：`java -jar myapp.jar`
+
+> **冲突规则**：同时使用 `-Dfxmlkit.devmode` 和代码中的 `enableDevelopmentMode()`
+> / `disableDevelopmentMode()` 时，**后调用者生效**。JVM 属性在类加载时读取一次，
+> 代码调用发生在其之后，因此 **代码调用始终覆盖 JVM 参数**。这让你即便使用了特定
+> 启动命令，仍可以在代码里强制切换模式。
 
 ---
 

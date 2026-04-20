@@ -561,28 +561,33 @@ public class MyApp extends Application {
 }
 ```
 
-**Option 2: Use JVM argument for automatic switching**
+**Option 2: Use the built-in JVM argument for automatic switching**
+
+FxmlKit reads the `-Dfxmlkit.devmode` system property at class-load time. Setting
+it to `true` automatically enables hot reload — no `enableDevelopmentMode()` call
+required in your code:
 
 ```java
 public class MyApp extends Application {
-    // Set via JVM argument: -Ddev.mode=true
-    private static final boolean DEV_MODE = Boolean.getBoolean("dev.mode");
-    
     @Override
     public void start(Stage stage) {
-        if (DEV_MODE) {
-            FxmlKit.enableDevelopmentMode();
-        }
-        
+        // No explicit enableDevelopmentMode() - controlled by -Dfxmlkit.devmode
         stage.setScene(new Scene(new MainView()));
         stage.show();
     }
 }
 ```
 
-Run in development: `java -Ddev.mode=true -jar myapp.jar`
+Run in development: `java -Dfxmlkit.devmode=true -jar myapp.jar`
 
 Run in production: `java -jar myapp.jar`
+
+> **Conflict resolution:** If you both pass `-Dfxmlkit.devmode` and call
+> `enableDevelopmentMode()` / `disableDevelopmentMode()` from code, the
+> **last writer wins**. Because the JVM property is read once at class-load time
+> and code calls happen afterward, **code calls always override the JVM flag**.
+> This lets you force a specific mode from code when needed, regardless of how
+> the app was launched.
 
 ---
 
